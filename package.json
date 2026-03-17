@@ -70,7 +70,7 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        { "target": "dmg", "arch": ["arm64"] }
       ],
       "icon": "icon.png",
       "category": "public.app-category.graphics-design"
