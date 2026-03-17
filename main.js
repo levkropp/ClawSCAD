@@ -6,7 +6,21 @@ const pty = require('node-pty');
 const chokidar = require('chokidar');
 const { execFile, spawn } = require('child_process');
 
-const OPENSCAD_BIN = process.env.OPENSCAD_BINARY || 'openscad';
+// Auto-detect OpenSCAD on Windows if not in PATH
+function findOpenSCAD() {
+  if (process.env.OPENSCAD_BINARY) return process.env.OPENSCAD_BINARY;
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:\\Program Files\\OpenSCAD\\openscad.exe',
+      'C:\\Program Files (x86)\\OpenSCAD\\openscad.exe',
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return 'openscad';
+}
+const OPENSCAD_BIN = findOpenSCAD();
 const DEFAULT_SHELL = process.platform === 'win32'
   ? (process.env.COMSPEC || 'cmd.exe')
   : (process.env.SHELL || '/bin/bash');
@@ -200,12 +214,14 @@ function openWindow(wsDir) {
 
   initWorkspace(ctx);
   loadState(ctx);
-  startTerminal(ctx);
   startFileWatcher(ctx);
 
   win.setTitle(`ClawSCAD — ${ctx.workspaceDir}`);
 
   win.webContents.once('did-finish-load', () => {
+    // Start terminal here so the renderer is already listening for 'terminal:data'
+    // and won't miss Claude's initial output.
+    startTerminal(ctx);
     sendCheckpoints(ctx);
     if (ctx.state.active && ctx.state.checkpoints[ctx.state.active]) {
       const cp = ctx.state.checkpoints[ctx.state.active];
@@ -333,6 +349,7 @@ function initWorkspace(ctx) {
   settings.mcpServers.openscad = {
     command: 'npx',
     args: ['-y', 'openscad-mcp-server'],
+    env: { OPENSCAD_BINARY: OPENSCAD_BIN },
   };
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
