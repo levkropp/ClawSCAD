@@ -4,7 +4,7 @@
   "description": "AI-powered 3D CAD — OpenSCAD + Claude Code with checkpoint branching",
   "main": "main.js",
   "scripts": {
-    "postinstall": "electron-rebuild -f -w node-pty",
+    "postinstall": "node scripts/postinstall.js",
     "build:renderer": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && esbuild renderer.js --bundle --outfile=dist/renderer.js --format=esm --platform=browser --loader:.ttf=file",
     "start": "npm run build:renderer && electron .",
     "dev": "npm run build:renderer && electron . --dev",
@@ -21,7 +21,7 @@
     "@xterm/xterm": "^5.5.0",
     "chokidar": "^3.6.0",
     "monaco-editor": "^0.55.1",
-    "node-pty": "^1.0.0",
+    "node-pty": "^1.1.0",
     "three": "^0.170.0"
   },
   "devDependencies": {
@@ -44,23 +44,37 @@
       "index.html",
       "style.css",
       "icon.png",
+      "scripts/**/*",
       "dist/**/*",
       "node_modules/**/*",
       "!node_modules/.cache"
     ],
     "extraResources": [
-      { "from": "icon.png", "to": "icon.png" }
+      {
+        "from": "icon.png",
+        "to": "icon.png"
+      }
     ],
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "icon.png",
       "category": "Graphics"
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "icon.png"
     },
@@ -70,15 +84,28 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "icon": "icon.png",
       "category": "public.app-category.graphics-design"
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   },
