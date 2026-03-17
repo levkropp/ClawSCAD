@@ -7,6 +7,9 @@ const chokidar = require('chokidar');
 const { execFile, spawn } = require('child_process');
 
 const OPENSCAD_BIN = process.env.OPENSCAD_BINARY || 'openscad';
+const DEFAULT_SHELL = process.platform === 'win32'
+  ? (process.env.COMSPEC || 'cmd.exe')
+  : (process.env.SHELL || '/bin/bash');
 const STATE_FILE = 'clawscad.json';
 const ACTIVE_FILE = 'active.scad';
 const MAX_WINDOWS = 4;
@@ -628,6 +631,7 @@ function spawnPty(ctx, cmd, args = []) {
     rows: 24,
     cwd: ctx.workspaceDir,
     env: { ...process.env, COLORTERM: 'truecolor' },
+    ...(process.platform === 'win32' && { useConpty: false }),
   });
   proc.onData((data) => ctxSend(ctx, 'terminal:data', data));
   return proc;
@@ -640,20 +644,24 @@ function spawnPty2(ctx, cmd, args = []) {
     rows: 24,
     cwd: ctx.workspaceDir,
     env: { ...process.env, COLORTERM: 'truecolor' },
+    ...(process.platform === 'win32' && { useConpty: false }),
   });
   proc.onData((data) => ctxSend(ctx, 'terminal2:data', data));
   return proc;
 }
 
 function startTerminal(ctx) {
-  const shell = process.env.SHELL || '/bin/bash';
   try {
     ctx.ptyProcess = spawnPty(ctx, 'claude', []);
   } catch {
-    ctx.ptyProcess = spawnPty(ctx, shell, []);
+    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
   }
   ctx.ptyProcess.onExit(() => {
-    ctx.ptyProcess = spawnPty(ctx, shell, []);
+    try {
+      ctx.ptyProcess = spawnPty(ctx, 'claude', []);
+    } catch {
+      ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
+    }
     ctx.ptyProcess.onExit(() => {});
   });
 }
@@ -663,10 +671,14 @@ function restartTerminal(ctx, args = []) {
   try {
     ctx.ptyProcess = spawnPty(ctx, 'claude', args);
   } catch {
-    ctx.ptyProcess = spawnPty(ctx, process.env.SHELL || '/bin/bash', []);
+    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
   }
   ctx.ptyProcess.onExit(() => {
-    ctx.ptyProcess = spawnPty(ctx, process.env.SHELL || '/bin/bash', []);
+    try {
+      ctx.ptyProcess = spawnPty(ctx, 'claude', []);
+    } catch {
+      ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
+    }
     ctx.ptyProcess.onExit(() => {});
   });
 }
@@ -721,7 +733,7 @@ ipcMain.handle('terminal2:spawn', (event) => {
   try {
     ctx.ptyProcess2 = spawnPty2(ctx, 'claude', []);
   } catch {
-    ctx.ptyProcess2 = spawnPty2(ctx, process.env.SHELL || '/bin/bash', []);
+    ctx.ptyProcess2 = spawnPty2(ctx, DEFAULT_SHELL, []);
   }
   ctx.ptyProcess2.onExit(() => { ctx.ptyProcess2 = null; });
 });
