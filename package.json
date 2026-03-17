@@ -1,15 +1,20 @@
 {
   "name": "clawscad",
   "version": "0.1.0",
-  "description": "OpenSCAD + Claude Code with checkpoint branching",
+  "description": "AI-powered 3D CAD — OpenSCAD + Claude Code with checkpoint branching",
   "main": "main.js",
   "scripts": {
     "postinstall": "electron-rebuild -f -w node-pty",
-    "build:renderer": "mkdir -p dist && esbuild renderer.js --bundle --outfile=dist/renderer.js --format=esm --platform=browser --loader:.ttf=file",
+    "build:renderer": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && esbuild renderer.js --bundle --outfile=dist/renderer.js --format=esm --platform=browser --loader:.ttf=file",
     "start": "npm run build:renderer && electron .",
     "dev": "npm run build:renderer && electron . --dev",
     "test": "npm run build:renderer && npx playwright test",
-    "test:headed": "npm run build:renderer && npx playwright test --headed"
+    "test:headed": "npm run build:renderer && npx playwright test --headed",
+    "pack": "npm run build:renderer && electron-builder --dir",
+    "dist": "npm run build:renderer && electron-builder",
+    "dist:linux": "npm run build:renderer && electron-builder --linux",
+    "dist:win": "npm run build:renderer && electron-builder --win",
+    "dist:mac": "npm run build:renderer && electron-builder --mac"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -23,8 +28,59 @@
     "@electron/rebuild": "^3.6.0",
     "@playwright/test": "^1.58.2",
     "electron": "^33.0.0",
+    "electron-builder": "^26.8.1",
     "electron-playwright-helpers": "^2.1.0",
     "esbuild": "^0.24.0"
+  },
+  "build": {
+    "appId": "com.clawscad.app",
+    "directories": {
+      "output": "release"
+    },
+    "productName": "ClawSCAD",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "icon.png",
+      "dist/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      { "from": "icon.png", "to": "icon.png" }
+    ],
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] }
+      ],
+      "icon": "icon.png",
+      "category": "Graphics"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "icon.png",
+      "category": "public.app-category.graphics-design"
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
   },
   "license": "MIT"
 }
