@@ -227,6 +227,8 @@ term.loadAddon(fitAddon);
 const termEl = document.getElementById('terminal');
 term.open(termEl);
 fitAddon.fit();
+term.focus();
+termEl.addEventListener('click', () => term.focus());
 
 window.api.onTerminalData((data) => term.write(data));
 term.onData((data) => window.api.sendTerminalInput(data));
@@ -257,6 +259,8 @@ document.getElementById('add-terminal-btn').addEventListener('click', async () =
   const termEl2 = document.getElementById('terminal-2');
   term2.open(termEl2);
   fitAddon2.fit();
+  term2.focus();
+  termEl2.addEventListener('click', () => term2.focus());
 
   window.api.onTerminal2Data((data) => { if (term2) term2.write(data); });
   term2.onData((data) => window.api.sendTerminal2Input(data));
