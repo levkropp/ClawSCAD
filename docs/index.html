@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClawSCAD — AI-Powered 3D CAD</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a1e;
+      color: #c0c0d0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+
+    /* Grid background — matches the icon */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(50, 80, 200, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(50, 80, 200, 0.06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 0 48px;
+    }
+
+    .hero-icon {
+      width: 96px;
+      height: 96px;
+      margin-bottom: 24px;
+      border-radius: 20px;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      color: #4488ff;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #8888bb;
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #4488ff;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #5599ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(68, 136, 255, 0.3);
+    }
+
+    .btn-secondary {
+      background: rgba(68, 136, 255, 0.1);
+      color: #4488ff;
+      border: 1px solid rgba(68, 136, 255, 0.2);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(68, 136, 255, 0.15);
+      border-color: rgba(68, 136, 255, 0.4);
+    }
+
+    /* Screenshot */
+    .screenshot {
+      text-align: center;
+      padding: 0 0 64px;
+    }
+
+    .screenshot img {
+      width: 100%;
+      max-width: 900px;
+      border-radius: 12px;
+      border: 1px solid #1a1a3a;
+      box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Features grid */
+    .features {
+      padding: 48px 0 64px;
+    }
+
+    .features h2 {
+      font-size: 32px;
+      color: #c0c0e0;
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: rgba(15, 15, 35, 0.8);
+      border: 1px solid #1a1a3a;
+      border-radius: 12px;
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: #2a2a5a;
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      color: #4488ff;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: #7777aa;
+      line-height: 1.7;
+    }
+
+    /* Install */
+    .install {
+      padding: 48px 0 64px;
+      text-align: center;
+    }
+
+    .install h2 {
+      font-size: 32px;
+      color: #c0c0e0;
+      margin-bottom: 24px;
+    }
+
+    .code-block {
+      display: inline-block;
+      text-align: left;
+      background: #0d0d2a;
+      border: 1px solid #1a1a3a;
+      border-radius: 12px;
+      padding: 24px 32px;
+      font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+      font-size: 14px;
+      color: #b0b0d0;
+      line-height: 1.8;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    .code-block .comment { color: #44447a; }
+    .code-block .cmd { color: #50fa7b; }
+
+    /* Prerequisites */
+    .prereqs {
+      margin-top: 32px;
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .prereq {
+      padding: 8px 16px;
+      border-radius: 6px;
+      background: rgba(68, 136, 255, 0.08);
+      border: 1px solid rgba(68, 136, 255, 0.15);
+      font-size: 13px;
+      color: #6688bb;
+    }
+
+    .prereq a {
+      color: #4488ff;
+      text-decoration: none;
+    }
+
+    .prereq a:hover { text-decoration: underline; }
+
+    /* Footer */
+    .footer {
+      padding: 48px 0;
+      text-align: center;
+      border-top: 1px solid #1a1a3a;
+      color: #444466;
+      font-size: 13px;
+    }
+
+    .footer a {
+      color: #5566aa;
+      text-decoration: none;
+    }
+
+    .footer a:hover { color: #4488ff; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Hero -->
+    <section class="hero">
+      <img src="../icon.png" alt="ClawSCAD" class="hero-icon">
+      <h1>ClawSCAD</h1>
+      <p>AI-powered 3D CAD environment. OpenSCAD + Claude Code with checkpoint branching, auto-iteration, and multi-viewport support.</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/levkropp/ClawSCAD" class="btn btn-primary">
+          View on GitHub
+        </a>
+        <a href="https://github.com/levkropp/ClawSCAD/releases" class="btn btn-secondary">
+          Download
+        </a>
+      </div>
+    </section>
+
+    <!-- Screenshot -->
+    <section class="screenshot">
+      <img src="../screenshot.png" alt="ClawSCAD in action">
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+      <h2>Features</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>AI-Driven Modeling</h3>
+          <p>Claude Code writes OpenSCAD, renders it, validates the output, and auto-iterates until the model is correct. Just describe what you want.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Checkpoint Branching</h3>
+          <p>Every iteration is an immutable checkpoint in a visual tree. Click any node to go back. Branch from any point to explore alternatives.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Live 3D Viewport</h3>
+          <p>PBR rendering with reflections, orbit controls, wireframe, edge overlay, orthographic mode, and 7 camera presets. Click parts to inspect dimensions and print cost.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Multi-Viewport</h3>
+          <p>Split the view to compare checkpoints side by side. Each viewport has its own camera, toolbar, source editor, and history panel.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Source Editor</h3>
+          <p>Monaco editor with OpenSCAD syntax highlighting, find/replace, and live error markers from OpenSCAD's output.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Auto-Iteration</h3>
+          <p>When a render fails, ClawSCAD writes the errors and nudges Claude to fix them automatically. No broken models reach the user.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Color Support</h3>
+          <p>6 customizable color swatches for instant model coloring. Per-part color picker. 3MF export preserves colors.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Export</h3>
+          <p>One-click export to STL, 3MF, or PNG. Print cost estimation with configurable infill, material density, and cost per kg.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Multi-Project</h3>
+          <p>Open up to 4 project windows. Claude sees all workspaces simultaneously and can reference designs across projects.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="install">
+      <h2>Get Started</h2>
+      <div class="code-block">
+        <span class="cmd">git clone</span> https://github.com/levkropp/ClawSCAD.git<br>
+        <span class="cmd">cd</span> ClawSCAD<br>
+        <span class="cmd">npm install</span><br>
+        <span class="cmd">npm start</span>
+      </div>
+      <div class="prereqs">
+        <span class="prereq"><a href="https://nodejs.org/">Node.js</a> 18+</span>
+        <span class="prereq"><a href="https://openscad.org/downloads.html">OpenSCAD</a></span>
+        <span class="prereq"><a href="https://github.com/anthropics/claude-code">Claude Code</a></span>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>MIT License &middot; <a href="https://github.com/levkropp/ClawSCAD">GitHub</a></p>
+    </footer>
+  </div>
+
+</body>
+</html>

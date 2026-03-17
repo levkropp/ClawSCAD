@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClawSCAD</title>
+  <link rel="stylesheet" href="./node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="./dist/renderer.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div id="app-header">
+      <button id="app-menu-btn" class="brand-btn">ClawSCAD <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></button>
+      <div id="app-menu" class="hidden">
+        <button class="menu-item" data-action="split-viewport">New Viewport <span class="menu-shortcut">Ctrl+N</span></button>
+        <button class="menu-item" data-action="new-project">New Project Window...</button>
+        <button class="menu-item" data-action="open-workspace">Switch Workspace...</button>
+        <button class="menu-item" data-action="open-in-files">Show in File Manager</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" data-action="screenshot">Screenshot Viewport</button>
+        <button class="menu-item" data-action="toggle-editor">Toggle Source Editor</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" data-action="reset-view">Reset Camera View</button>
+        <button class="menu-item" data-action="zoom-fit">Zoom to Fit</button>
+        <button class="menu-item" data-action="toggle-wireframe">Toggle Wireframe</button>
+        <button class="menu-item" data-action="toggle-ortho">Toggle Ortho/Perspective</button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" data-action="devtools">Developer Tools</button>
+      </div>
+      <span class="separator"></span>
+      <div class="header-export-group">
+        <button class="header-btn" data-export="stl" title="Export STL">STL</button>
+        <button class="header-btn" data-export="3mf" title="Export 3MF">3MF</button>
+        <button class="header-btn" data-export="png" title="Export PNG">PNG</button>
+      </div>
+      <span class="separator"></span>
+      <button id="workspace-path-btn" class="path-btn">
+        <span id="workspace-path"></span>
+        <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg>
+      </button>
+      <div id="workspace-dropdown" class="hidden">
+        <div class="ws-input-row">
+          <input id="ws-path-input" type="text" placeholder="Paste path to .scad file or folder...">
+          <button id="ws-path-go">Open</button>
+        </div>
+        <div class="ws-divider"></div>
+        <div id="ws-file-browser" class="hidden">
+          <div id="ws-browser-path"></div>
+          <div id="ws-browser-list"></div>
+        </div>
+        <div id="ws-recent-list"></div>
+      </div>
+    </div>
+
+    <!-- Main content area -->
+    <div id="main-content">
+      <!-- Left: Viewport + Checkpoints -->
+      <div id="left-panel">
+        <div id="viewports-container">
+        <div id="viewport" class="viewport-pane" tabindex="0">
+          <!-- Toolbars (floating, split left/right) -->
+          <div id="viewport-toolbar-left"></div>
+          <div id="viewport-toolbar-right"></div>
+          <!-- View presets (floating, bottom-left) -->
+          <div id="view-presets"></div>
+          <!-- Part properties panel (floating, bottom-right) -->
+          <div id="part-props" class="hidden">
+            <div id="part-props-header">
+              <span id="part-props-title">Part</span>
+              <button id="part-props-settings-btn" title="Print Settings">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"/></svg>
+              </button>
+              <button id="part-props-close" title="Close">&times;</button>
+            </div>
+            <div id="part-props-body"></div>
+            <div id="part-props-settings" class="hidden">
+              <label>Infill % <input id="setting-infill" type="number" min="0" max="100" value="15"></label>
+              <label>Material <select id="setting-material">
+                <option value="PLA">PLA (1.24 g/cm3)</option>
+                <option value="ABS">ABS (1.04 g/cm3)</option>
+                <option value="PETG">PETG (1.27 g/cm3)</option>
+              </select></label>
+              <label>Cost $/kg <input id="setting-cost" type="number" min="0" step="1" value="20"></label>
+            </div>
+          </div>
+          <!-- Render overlay (centered) -->
+          <div id="render-overlay">
+            <div class="overlay-content">
+              <div class="spinner"></div>
+              <div class="overlay-text">Rendering...</div>
+              <div class="overlay-time" id="render-time">0:00</div>
+              <div class="overlay-bar"><div class="bar-fill"></div></div>
+            </div>
+          </div>
+        </div>
+        </div><!-- /viewports-container -->
+        <div id="status-bar">
+          <span class="label">ClawSCAD</span>
+          <span id="status">Waiting for model...</span>
+          <span class="spacer"></span>
+          <div id="color-swatches">
+            <div class="swatch" data-idx="0" style="background:#4488ff" title="Left-click: apply | Right-click: edit"></div>
+            <div class="swatch" data-idx="1" style="background:#ff5555" title="Left-click: apply | Right-click: edit"></div>
+            <div class="swatch" data-idx="2" style="background:#50fa7b" title="Left-click: apply | Right-click: edit"></div>
+            <div class="swatch" data-idx="3" style="background:#f1fa8c" title="Left-click: apply | Right-click: edit"></div>
+            <div class="swatch" data-idx="4" style="background:#ff79c6" title="Left-click: apply | Right-click: edit"></div>
+            <div class="swatch" data-idx="5" style="background:#8be9fd" title="Left-click: apply | Right-click: edit"></div>
+          </div>
+          <input type="color" id="swatch-editor" class="hidden" value="#4488ff">
+        </div>
+        <div id="editor-panel" class="collapsed">
+          <div id="editor-header">
+            <button id="editor-toggle" title="Toggle Editor">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <span class="label">Source</span>
+            <span id="editor-filename"></span>
+            <span class="spacer"></span>
+            <button id="editor-edit-toggle" class="small-btn" title="Toggle Edit Mode">Edit</button>
+            <button id="editor-save-btn" class="small-btn hidden" title="Save (Ctrl+S)">Save</button>
+          </div>
+          <div id="editor-container"></div>
+        </div>
+        <div id="checkpoint-panel">
+          <div id="checkpoint-header">
+            <button id="checkpoint-toggle" class="panel-toggle" title="Toggle History">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <span class="label">History</span>
+            <span class="spacer"></span>
+            <button id="resume-session-btn" class="small-btn hidden" title="Resume the Claude session that created this checkpoint">Resume Session</button>
+          </div>
+          <div id="checkpoint-tree"></div>
+        </div>
+        <!-- Checkpoint context menu -->
+        <div id="cp-context-menu" class="hidden">
+          <button class="ctx-item" data-action="rename">Rename</button>
+          <button class="ctx-item" data-action="view-source">View Source</button>
+          <button class="ctx-item" data-action="resume-session">Resume Session</button>
+          <div class="ctx-divider"></div>
+          <button class="ctx-item" data-action="collapse">Collapse Children</button>
+          <button class="ctx-item" data-action="branch-here">Branch from Here</button>
+          <div class="ctx-divider"></div>
+          <button class="ctx-item ctx-danger" data-action="delete">Delete</button>
+        </div>
+        <!-- Checkpoint tooltip -->
+        <div id="cp-tooltip" class="hidden">
+          <div id="cp-tooltip-desc"></div>
+          <div id="cp-tooltip-meta"></div>
+        </div>
+      </div>
+
+      <!-- Splitter -->
+      <div id="splitter"></div>
+
+      <!-- Right: Terminal(s) -->
+      <div id="right-panel">
+        <div class="terminal-pane" id="terminal-pane-0">
+          <div class="terminal-pane-header">
+            <span class="label">Claude Code</span>
+            <span class="spacer"></span>
+            <button id="add-terminal-btn" class="small-btn" title="Add second terminal (+)">+</button>
+            <button id="session-btn" class="small-btn" title="Session History">Sessions</button>
+            <div id="session-dropdown" class="hidden">
+              <button id="session-new" class="session-action">New Session</button>
+              <button id="session-continue" class="session-action">Continue Last</button>
+              <div class="session-divider"></div>
+              <div id="session-list"></div>
+            </div>
+          </div>
+          <div class="terminal-container" id="terminal"></div>
+        </div>
+        <div class="terminal-pane hidden" id="terminal-pane-1">
+          <div class="terminal-pane-header">
+            <span class="label">Claude Code 2</span>
+            <span class="spacer"></span>
+            <button class="close-terminal-btn small-btn" data-pane="1" title="Close this terminal">x</button>
+          </div>
+          <div class="terminal-container" id="terminal-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
+
+  <script type="module" src="./dist/renderer.js"></script>
+</body>
+</html>
