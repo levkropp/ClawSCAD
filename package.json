@@ -50,31 +50,18 @@
       "!node_modules/.cache"
     ],
     "extraResources": [
-      {
-        "from": "icon.png",
-        "to": "icon.png"
-      }
+      { "from": "icon.png", "to": "icon.png" }
     ],
     "linux": {
       "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "AppImage", "arch": ["x64"] }
       ],
       "icon": "icon.png",
       "category": "Graphics"
     },
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] }
       ],
       "icon": "icon.png"
     },
@@ -84,28 +71,15 @@
     },
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64"
-          ]
-        }
+        { "target": "dmg", "arch": ["arm64"] }
       ],
       "icon": "icon.png",
       "category": "public.app-category.graphics-design"
     },
     "dmg": {
       "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
       ]
     }
   },
