@@ -11,6 +11,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,11 +23,26 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version --no-git-tag-version "$VERSION"
+
+      - name: Cache OpenSCAD vendor binary
+        uses: actions/cache@v4
+        with:
+          path: vendors/
+          key: openscad-linux-2026.03.16
+
+      - name: Download OpenSCAD
+        run: npm run download-openscad
 
       - name: Build renderer
         run: npm run build:renderer

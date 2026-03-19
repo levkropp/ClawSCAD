@@ -39,6 +39,7 @@
       "output": "release"
     },
     "productName": "ClawSCAD",
+    "artifactName": "${productName}-${version}.${ext}",
     "files": [
       "main.js",
       "preload.js",
