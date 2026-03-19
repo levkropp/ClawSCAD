@@ -33,8 +33,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');"
+          D="${GITHUB_REF_NAME#v}"
+          SEMVER="${D:0:4}.$((10#${D:4:2})).$((10#${D:6:2}))"
+          npm version --no-git-tag-version "$SEMVER"
 
       - name: Cache OpenSCAD vendor binary
         uses: actions/cache@v4
