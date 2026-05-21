@@ -24,6 +24,27 @@ function resolveOpenSCAD() {
 }
 const OPENSCAD_BIN = resolveOpenSCAD();
 
+// Resolve the Claude Code CLI binary. Checks the standalone installer location
+// (~/.claude/local/claude), user/system PATH, and other common install paths.
+// Returns null if not found — startTerminal will auto-install via npm in that case.
+let _claudeBin = null;
+function resolveClaude() {
+  if (_claudeBin) return _claudeBin;
+  const candidates = [
+    path.join(os.homedir(), '.claude', 'local', 'claude'), // standalone installer
+    path.join(os.homedir(), '.local', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+  ];
+  // Search every directory on this process's PATH (catches npm global and others)
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    candidates.push(path.join(dir, 'claude'));
+  }
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) { _claudeBin = c; return c; } } catch {}
+  }
+  return null;
+}
+
 // Extra env vars needed when running OpenSCAD on specific platforms.
 // On Linux, APPIMAGE_EXTRACT_AND_RUN=1 lets a bundled AppImage run inside
 // the Electron AppImage without needing nested FUSE mounts.
@@ -673,13 +694,27 @@ function spawnPty2(ctx, cmd, args = []) {
   return proc;
 }
 
+// Spawn a pty running the Claude Code CLI. If the binary can't be found,
+// auto-installs it via npm inside the pty so the user sees download progress,
+// then execs into claude. Re-resolves after install so restarts work immediately.
+function spawnClaude(ctx, args = []) {
+  const bin = resolveClaude();
+  if (bin) return spawnPty(ctx, bin, args);
+
+  const shell = process.env.SHELL || '/bin/bash';
+  const argStr = args.map(a => `"${a.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(' ');
+  const installCmd = [
+    'echo "━━ ClawSCAD: Claude Code not found — installing now… ━━"',
+    'npm install -g @anthropic-ai/claude-code',
+    'echo "━━ Install complete — starting Claude Code ━━"',
+    `exec claude${argStr ? ' ' + argStr : ''}`,
+  ].join(' && ');
+  return spawnPty(ctx, shell, ['-c', installCmd]);
+}
+
 function startTerminal(ctx) {
   const shell = process.env.SHELL || '/bin/bash';
-  try {
-    ctx.ptyProcess = spawnPty(ctx, 'claude', []);
-  } catch {
-    ctx.ptyProcess = spawnPty(ctx, shell, []);
-  }
+  ctx.ptyProcess = spawnClaude(ctx, []);
   ctx.ptyProcess.onExit(() => {
     ctx.ptyProcess = spawnPty(ctx, shell, []);
     ctx.ptyProcess.onExit(() => {});
@@ -688,11 +723,7 @@ function startTerminal(ctx) {
 
 function restartTerminal(ctx, args = []) {
   if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
-  try {
-    ctx.ptyProcess = spawnPty(ctx, 'claude', args);
-  } catch {
-    ctx.ptyProcess = spawnPty(ctx, process.env.SHELL || '/bin/bash', []);
-  }
+  ctx.ptyProcess = spawnClaude(ctx, args);
   ctx.ptyProcess.onExit(() => {
     ctx.ptyProcess = spawnPty(ctx, process.env.SHELL || '/bin/bash', []);
     ctx.ptyProcess.onExit(() => {});
