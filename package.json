@@ -26,12 +26,15 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.6.0",
+    "@electron/rebuild": "^4.0.4",
     "@playwright/test": "^1.58.2",
-    "electron": "^33.0.0",
+    "electron": "^42.2.0",
     "electron-builder": "^26.8.1",
     "electron-playwright-helpers": "^2.1.0",
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.28.0"
+  },
+  "overrides": {
+    "dompurify": "^3.4.5"
   },
   "build": {
     "appId": "com.clawscad.app",
