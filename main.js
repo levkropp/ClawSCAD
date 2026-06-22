@@ -50,6 +50,12 @@ function resolveClaude() {
   return null;
 }
 
+// Interactive shell to fall back to when Claude can't be launched. On Windows
+// process.env.SHELL is unset, so a bare '/bin/bash' fallback would fail to spawn.
+const DEFAULT_SHELL = process.platform === 'win32'
+  ? (process.env.COMSPEC || 'cmd.exe')
+  : (process.env.SHELL || '/bin/bash');
+
 // Extra env vars needed when running OpenSCAD on specific platforms.
 // On Linux, APPIMAGE_EXTRACT_AND_RUN=1 lets a bundled AppImage run inside
 // the Electron AppImage without needing nested FUSE mounts.
@@ -699,29 +705,25 @@ function spawnPty2(ctx, cmd, args = []) {
   return proc;
 }
 
-// Spawn a pty running the Claude Code CLI. If the binary can't be found,
-// auto-installs it via npm inside the pty so the user sees download progress,
-// then execs into claude. Re-resolves after install so restarts work immediately.
+// Spawn a pty running the Claude Code CLI. If the binary can't be found (or
+// fails to launch), drop the user into a normal shell with a hint on how to
+// install it — we don't silently install global npm packages on their behalf.
 function spawnClaude(ctx, args = []) {
   const bin = resolveClaude();
-  if (bin) return spawnPty(ctx, bin, args);
-
-  const shell = process.env.SHELL || '/bin/bash';
-  const argStr = args.map(a => `"${a.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(' ');
-  const installCmd = [
-    'echo "━━ ClawSCAD: Claude Code not found — installing now… ━━"',
-    'npm install -g @anthropic-ai/claude-code',
-    'echo "━━ Install complete — starting Claude Code ━━"',
-    `exec claude${argStr ? ' ' + argStr : ''}`,
-  ].join(' && ');
-  return spawnPty(ctx, shell, ['-c', installCmd]);
+  if (bin) {
+    try { return spawnPty(ctx, bin, args); } catch {}
+  }
+  const proc = spawnPty(ctx, DEFAULT_SHELL, []);
+  ctxSend(ctx, 'terminal:data',
+    '\r\n\x1b[33mClaude Code CLI not found.\x1b[0m Install it from ' +
+    'https://docs.claude.com/en/docs/claude-code/setup then restart the terminal.\r\n\r\n');
+  return proc;
 }
 
 function startTerminal(ctx) {
-  const shell = process.env.SHELL || '/bin/bash';
   ctx.ptyProcess = spawnClaude(ctx, []);
   ctx.ptyProcess.onExit(() => {
-    ctx.ptyProcess = spawnPty(ctx, shell, []);
+    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
     ctx.ptyProcess.onExit(() => {});
   });
 }
@@ -730,7 +732,7 @@ function restartTerminal(ctx, args = []) {
   if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
   ctx.ptyProcess = spawnClaude(ctx, args);
   ctx.ptyProcess.onExit(() => {
-    ctx.ptyProcess = spawnPty(ctx, process.env.SHELL || '/bin/bash', []);
+    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
     ctx.ptyProcess.onExit(() => {});
   });
 }
@@ -783,9 +785,9 @@ ipcMain.handle('terminal2:spawn', (event) => {
   const ctx = getCtx(event);
   if (!ctx || ctx.ptyProcess2) return;
   try {
-    ctx.ptyProcess2 = spawnPty2(ctx, 'claude', []);
+    ctx.ptyProcess2 = spawnPty2(ctx, resolveClaude() || 'claude', []);
   } catch {
-    ctx.ptyProcess2 = spawnPty2(ctx, process.env.SHELL || '/bin/bash', []);
+    ctx.ptyProcess2 = spawnPty2(ctx, DEFAULT_SHELL, []);
   }
   ctx.ptyProcess2.onExit(() => { ctx.ptyProcess2 = null; });
 });
