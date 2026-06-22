@@ -39,8 +39,13 @@ function resolveClaude() {
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
     candidates.push(path.join(dir, 'claude'));
   }
+  // On Windows the executable is claude.exe (standalone / ~/.local/bin) or
+  // claude.cmd (npm global), so probe platform extensions before the bare name.
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
   for (const c of candidates) {
-    try { if (fs.existsSync(c)) { _claudeBin = c; return c; } } catch {}
+    for (const ext of exts) {
+      try { if (fs.existsSync(c + ext)) { _claudeBin = c + ext; return c + ext; } } catch {}
+    }
   }
   return null;
 }
