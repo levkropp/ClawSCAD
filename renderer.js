@@ -1513,8 +1513,8 @@ appMenu.addEventListener('click', async (e) => {
     case 'open-in-files':
       window.api.openInFiles();
       break;
-    case 'toggle-agent':
-      await switchAgent();
+    case 'select-harness':
+      showAgentPicker();
       break;
     case 'screenshot':
       document.getElementById('btn-screenshot').click();
@@ -1560,9 +1560,6 @@ function applyAgentInfo(info) {
   if (paneLabel) paneLabel.textContent = label;
   const pane2Label = document.getElementById('terminal-agent2-label');
   if (pane2Label) pane2Label.textContent = label + ' 2';
-  // Menu item
-  const menuSpan = document.getElementById('agent-name');
-  if (menuSpan) menuSpan.textContent = label;
   // Vision badge (model + "no-vision")
   const meta = document.getElementById('terminal-agent-meta');
   if (meta) {
@@ -1584,26 +1581,6 @@ async function refreshAgentInfo() {
     const info = await window.api.getAgent();
     applyAgentInfo(info);
   } catch {}
-}
-
-async function switchAgent() {
-  // Determine the target agent. We prefer toggling to the other one, but if
-  // the other backend's CLI isn't installed we keep the user on the current
-  // one and surface a toast so the switch isn't a silent no-op.
-  let available = { claude: true, opencode: true };
-  try { available = await window.api.getAvailableAgents(); } catch {}
-  const target = currentAgentState.agent === 'opencode' ? 'claude' : 'opencode';
-  if (!available[target]) {
-    showToast(`${formatAgentLabel(target)} CLI not found — install it then try again`, 'error');
-    return;
-  }
-  await window.api.setAgent(target);
-  applyAgentInfo({
-    agent: target,
-    model: target === 'opencode' ? currentAgentState.model : null,
-    visionSupported: target === 'claude' ? true : false,
-  });
-  showToast(`Switched to ${formatAgentLabel(target)} — terminal restarted`, 'success');
 }
 
 window.api.onAgentInfo((info) => applyAgentInfo(info));

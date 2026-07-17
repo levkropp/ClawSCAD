@@ -388,9 +388,19 @@ test.describe('Agent Backend', () => {
     expect(state.agent).toBe('claude');
   });
 
-  test('agent toggle menu item reflects the active backend', async () => {
-    const label = await page.locator('#agent-name').textContent();
-    expect(['Claude Code', 'OpenCode']).toContain(label);
+  test('Select Harness menu item opens the picker', async () => {
+    await page.locator('#app-menu-btn').click();
+    const item = page.locator('[data-action="select-harness"]');
+    await expect(item).toBeVisible();
+    await expect(item).toContainText('Select Harness');
+    await item.click();
+    // Picker opens (DISBALE_AGENT_PICKER is set in the main suite, but it only
+    // suppresses the *auto* first-run trigger — a manual open still works).
+    await expect(page.locator('#agent-picker')).not.toHaveClass(/hidden/);
+    // Helper text mentioning how to reopen is present
+    await expect(page.locator('#agent-picker')).toContainText('Select Harness');
+    // Dismiss by picking claude so the overlay isn't left open
+    await page.locator('.agent-option[data-agent="claude"]').click();
   });
 
   // Reset to claude for the rest of the suite so a persistent opencode state
