@@ -19,6 +19,7 @@
         <button class="menu-item" data-action="open-workspace">Switch Workspace...</button>
         <button class="menu-item" data-action="open-in-files">Show in File Manager</button>
         <div class="menu-divider"></div>
+        <button class="menu-item" data-action="toggle-agent">Agent: <span id="agent-name">Claude Code</span></button>
         <button class="menu-item" data-action="screenshot">Screenshot Viewport</button>
         <button class="menu-item" data-action="toggle-editor">Toggle Source Editor</button>
         <div class="menu-divider"></div>
@@ -130,7 +131,7 @@
             </button>
             <span class="label">History</span>
             <span class="spacer"></span>
-            <button id="resume-session-btn" class="small-btn hidden" title="Resume the Claude session that created this checkpoint">Resume Session</button>
+            <button id="resume-session-btn" class="small-btn hidden" title="Resume the agent session that created this checkpoint">Resume Session</button>
           </div>
           <div id="checkpoint-tree"></div>
         </div>
@@ -159,7 +160,8 @@
       <div id="right-panel">
         <div class="terminal-pane" id="terminal-pane-0">
           <div class="terminal-pane-header">
-            <span class="label">Claude Code</span>
+            <span class="label" id="terminal-agent-label">Claude Code</span>
+            <span id="terminal-agent-meta" class="agent-meta hidden"></span>
             <span class="spacer"></span>
             <button id="add-terminal-btn" class="small-btn" title="Add second terminal (+)">+</button>
             <button id="session-btn" class="small-btn" title="Session History">Sessions</button>
@@ -174,7 +176,7 @@
         </div>
         <div class="terminal-pane hidden" id="terminal-pane-1">
           <div class="terminal-pane-header">
-            <span class="label">Claude Code 2</span>
+            <span class="label" id="terminal-agent2-label">Claude Code 2</span>
             <span class="spacer"></span>
             <button class="close-terminal-btn small-btn" data-pane="1" title="Close this terminal">x</button>
           </div>
@@ -186,6 +188,27 @@
 
   <!-- Toast notifications -->
   <div id="toast-container"></div>
+
+  <!-- First-run agent picker (Claude Code vs OpenCode) -->
+  <div id="agent-picker" class="hidden">
+    <div class="agent-picker-overlay"></div>
+    <div class="agent-picker-card">
+      <div class="agent-picker-title">Choose your AI agent</div>
+      <div class="agent-picker-sub">ClawSCAD drives the right-hand terminal with either Claude Code or OpenCode. Pick one to get started — you can switch later from the <strong>ClawSCAD → Agent</strong> menu.</div>
+      <div class="agent-picker-options">
+        <button class="agent-option" data-agent="claude">
+          <div class="agent-option-title">Claude Code</div>
+          <div class="agent-option-desc">Anthropic's official coding agent. Always supports image input so it can visually inspect OpenSCAD renders.</div>
+          <div class="agent-option-avail"></div>
+        </button>
+        <button class="agent-option" data-agent="opencode">
+          <div class="agent-option-title">OpenCode</div>
+          <div class="agent-option-desc">Open-source agent from Anomaly. Works with 75+ LLM providers. Image-only MCP tools are auto-disabled for non-vision models.</div>
+          <div class="agent-option-avail"></div>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./dist/renderer.js"></script>
 </body>

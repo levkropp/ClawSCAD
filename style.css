@@ -1456,6 +1456,24 @@ body.dragging #splitter {
   text-transform: uppercase;
 }
 
+.terminal-pane-header .agent-meta {
+  color: #8be9fd;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid #2a4ab0;
+  border-radius: 8px;
+  white-space: nowrap;
+  text-transform: none;
+  background: rgba(43, 50, 90, 0.35);
+}
+.terminal-pane-header .agent-meta.no-vision {
+  color: #ffb86c;
+  border-color: #886622;
+}
+
 .terminal-pane-header .spacer {
   flex: 1;
 }
@@ -1647,3 +1665,169 @@ body.dragging #splitter {
   border-color: #2a2a5a;
   background: #1a1a38;
 }
+
+
+/* ── First-run Agent Picker ───────────────────────────────────────── */
+
+#agent-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#agent-picker.hidden { display: none; }
+
+.agent-picker-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 5, 15, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.agent-picker-card {
+  position: relative;
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  padding: 28px 28px 22px;
+  background: #0d0d20;
+  border: 1px solid #2a2a5a;
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #d0d0e0;
+}
+
+.agent-picker-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0f0ff;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.agent-picker-sub {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8888bb;
+  margin-bottom: 20px;
+}
+
+.agent-picker-sub strong { color: #c8c8ff; font-weight: 600; }
+
+.agent-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-option {
+  display: block;
+  width: 100
+/* ── First-run Agent Picker ───────────────────────────────────────── */
+
+#agent-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#agent-picker.hidden { display: none; }
+
+.agent-picker-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 5, 15, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.agent-picker-card {
+  position: relative;
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  padding: 28px 28px 22px;
+  background: #0d0d20;
+  border: 1px solid #2a2a5a;
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #d0d0e0;
+}
+
+.agent-picker-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0f0ff;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.agent-picker-sub {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8888bb;
+  margin-bottom: 20px;
+}
+
+.agent-picker-sub strong { color: #c8c8ff; font-weight: 600; }
+
+.agent-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  background: #14142a;
+  border: 1px solid #2a2a5a;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #d0d0e0;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.08s ease;
+}
+.agent-option:hover {
+  border-color: #4466cc;
+  background: #1a1a3a;
+}
+.agent-option:active { transform: translateY(1px); }
+.agent-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.agent-option.disabled:hover {
+  border-color: #2a2a5a;
+  background: #14142a;
+}
+
+.agent-option-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0f0ff;
+  margin-bottom: 4px;
+}
+
+.agent-option-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8888bb;
+}
+
+.agent-option-avail {
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #50fa7b;
+  text-transform: uppercase;
+}
+.agent-option.disabled .agent-option-avail { color: #ff5555; }

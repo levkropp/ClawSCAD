@@ -15,6 +15,13 @@ test.beforeAll(async () => {
   const { execSync } = require('child_process');
   execSync('npm run build:renderer', { cwd: APP_PATH, stdio: 'pipe' });
   fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+  // Don't actually launch the agent TUI during tests — we only inspect the
+  // IPC/config side effects (CLAUDE.md, opencode.json). Spawning a real
+  // claude/opencode TUI risked stalling worker teardown.
+  process.env.CLAWSCAD_DISABLE_AGENT_SPAWN = '1';
+  // Skip the first-run picker so its fullscreen overlay doesn't block the
+  // UI clicks the rest of the suite relies on.
+  process.env.CLAWSCAD_DISABLE_AGENT_PICKER = '1';
 });
 
 test.beforeEach(async () => {
@@ -320,6 +327,184 @@ test.describe('Workspace Setup', () => {
       expect(state).toHaveProperty('checkpoints');
       expect(state).toHaveProperty('active');
     }
+  });
+});
+
+// ── Agent Backend Tests ──────────────────────────────────────────────
+// Toggle between Claude Code and OpenCode, verify opencode.json is written,
+// and verify CLAUDE.md vision-aware rules flip when the model can't see images.
+
+test.describe('Agent Backend', () => {
+  test('agent:get returns a valid backend identifier with visionSupported', async () => {
+    const info = await page.evaluate(() => window.api.getAgent());
+    expect(['claude', 'opencode']).toContain(info.agent);
+    expect(typeof info.visionSupported).toBe('boolean');
+  });
+
+  test('switching to opencode writes opencode.json with the openscad MCP server', async () => {
+    // Pre-seed an opencode model that lacks image support so vision detection
+    // is deterministic regardless of the user's global opencode config.
+    fs.writeFileSync(
+      path.join(TEST_WORKSPACE, 'opencode.json'),
+      JSON.stringify({ $schema: 'https://opencode.ai/config.json', model: 'opencode-go/glm-5.2' }, null, 2)
+    );
+    await page.evaluate(() => window.api.setAgent('opencode'));
+    // refreshAgent shells out to `opencode debug config` + `opencode models`; give it a beat.
+    await page.waitForTimeout(3500);
+
+    const cfgPath = path.join(TEST_WORKSPACE, 'opencode.json');
+    expect(fs.existsSync(cfgPath)).toBe(true);
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    // The openscad MCP server should be present (added by initWorkspace merge)
+    expect(cfg.mcp).toBeDefined();
+    expect(cfg.mcp.openscad).toBeDefined();
+    expect(cfg.mcp.openscad.type).toBe('local');
+    expect(Array.isArray(cfg.mcp.openscad.command)).toBe(true);
+    expect(cfg.mcp.openscad.command).toContain('openscad-mcp-server');
+    expect(cfg.mcp.openscad.environment).toBeDefined();
+    expect(cfg.mcp.openscad.environment.OPENSCAD_PATH).toBeTruthy();
+    // Existing user keys are preserved (merge, not overwrite)
+    expect(cfg.model).toBe('opencode-go/glm-5.2');
+
+    // CLAUDE.md should reflect the no-vision path for glm-5.2
+    const claudeMd = fs.readFileSync(path.join(TEST_WORKSPACE, 'CLAUDE.md'), 'utf-8');
+    expect(claudeMd).toContain('MANDATORY RULES');
+    expect(claudeMd).toContain('cannot view images');
+    expect(claudeMd).not.toContain('visually inspect the result');
+    expect(claudeMd).toContain('validate_scad');
+    expect(claudeMd).toContain('analyze_model');
+  });
+
+  test('switching back to claude restores vision-on rules', async () => {
+    await page.evaluate(() => window.api.setAgent('opencode'));
+    await page.waitForTimeout(500);
+    await page.evaluate(() => window.api.setAgent('claude'));
+    await page.waitForTimeout(1000);
+    const claudeMd = fs.readFileSync(path.join(TEST_WORKSPACE, 'CLAUDE.md'), 'utf-8');
+    expect(claudeMd).toContain('visually inspect the result');
+    expect(claudeMd).not.toContain('cannot view images');
+    // State file should reflect claude
+    const state = JSON.parse(fs.readFileSync(path.join(TEST_WORKSPACE, 'clawscad.json'), 'utf-8'));
+    expect(state.agent).toBe('claude');
+  });
+
+  test('agent toggle menu item reflects the active backend', async () => {
+    const label = await page.locator('#agent-name').textContent();
+    expect(['Claude Code', 'OpenCode']).toContain(label);
+  });
+
+  // Reset to claude for the rest of the suite so a persistent opencode state
+  // can't poison subsequent tests in this shared workspace.
+  test.afterEach(async () => {
+    try { await page.evaluate(() => window.api.setAgent('claude')); } catch {}
+  });
+});
+
+// ── First-run Agent Picker Tests ──────────────────────────────────────
+// Verify the picker shows up on a fresh workspace and that picking an agent
+// marks agentChosen in state so the picker doesn't reappear on relaunch.
+// These tests use a dedicated workspace that's wiped between runs to force
+// the first-run path; they run with CLAWSCAD_DISABLE_AGENT_PICKER unset.
+
+test.describe('First-run Agent Picker', () => {
+  const PICKER_WORKSPACE = path.join(os.tmpdir(), 'clawscad-picker-test-' + Date.now());
+  let pickerApp;
+  let pickerPage;
+
+  test.beforeAll(async () => {
+    fs.mkdirSync(PICKER_WORKSPACE, { recursive: true });
+  });
+
+  test.beforeEach(async () => {
+    // Wipe state so each test starts first-run fresh.
+    try { fs.rmSync(path.join(PICKER_WORKSPACE, 'clawscad.json'), { force: true }); } catch {}
+    try { fs.rmSync(path.join(PICKER_WORKSPACE, 'CLAUDE.md'), { force: true }); } catch {}
+    // Spawn the agent is fine to disable, but DO allow the picker to fire.
+    const prevPick = process.env.CLAWSCAD_DISABLE_AGENT_PICKER;
+    delete process.env.CLAWSCAD_DISABLE_AGENT_PICKER;
+    pickerApp = await electron.launch({
+      args: [path.join(APP_PATH, 'main.js'), PICKER_WORKSPACE],
+      cwd: APP_PATH,
+      env: { ...process.env, CLAWSCAD_DISABLE_AGENT_SPAWN: '1' },
+    });
+    process.env.CLAWSCAD_DISABLE_AGENT_PICKER = prevPick;
+    pickerPage = await pickerApp.firstWindow();
+    await pickerPage.waitForLoadState('domcontentloaded');
+    await pickerPage.waitForTimeout(800);
+  });
+
+  test.afterEach(async () => {
+    if (pickerApp) await pickerApp.close();
+  });
+
+  test.afterAll(async () => {
+    fs.rmSync(PICKER_WORKSPACE, { recursive: true, force: true });
+  });
+
+  test('picker modal is visible on a fresh workspace', async () => {
+    const picker = pickerPage.locator('#agent-picker');
+    await expect(picker).not.toHaveClass(/hidden/);
+    // Both options should be present
+    await expect(pickerPage.locator('.agent-option[data-agent="claude"]')).toBeVisible();
+    await expect(pickerPage.locator('.agent-option[data-agent="opencode"]')).toBeVisible();
+  });
+
+  test('picker options report install status via getAvailableAgents', async () => {
+    // Both options should have an avail tag populated by showAgentPicker.
+    // The exact text depends on host install state, so just assert non-empty.
+    const claudeAvail = pickerPage.locator('.agent-option[data-agent="claude"] .agent-option-avail');
+    const openAvail = pickerPage.locator('.agent-option[data-agent="opencode"] .agent-option-avail');
+    await expect(claudeAvail).not.toHaveText('');
+    await expect(openAvail).not.toHaveText('');
+    // The disabled class should match the avail text.
+    const claudeText = (await claudeAvail.textContent()) || '';
+    const openText = (await openAvail.textContent()) || '';
+    const claudeBtn = pickerPage.locator('.agent-option[data-agent="claude"]');
+    const openBtn = pickerPage.locator('.agent-option[data-agent="opencode"]');
+    if (claudeText.includes('not installed')) {
+      await expect(claudeBtn).toHaveClass(/disabled/);
+    } else {
+      await expect(claudeBtn).not.toHaveClass(/disabled/);
+    }
+    if (openText.includes('not installed')) {
+      await expect(openBtn).toHaveClass(/disabled/);
+    } else {
+      await expect(openBtn).not.toHaveClass(/disabled/);
+    }
+  });
+
+  test('picking claude hides the picker and marks agentChosen=true', async () => {
+    await pickerPage.locator('.agent-option[data-agent="claude"]').click();
+    await pickerPage.waitForTimeout(800);
+    await expect(pickerPage.locator('#agent-picker')).toHaveClass(/hidden/);
+    // State file should now have agentChosen: true
+    const statePath = path.join(PICKER_WORKSPACE, 'clawscad.json');
+    expect(fs.existsSync(statePath)).toBe(true);
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+    expect(state.agentChosen).toBe(true);
+    expect(state.agent).toBe('claude');
+  });
+
+  test('picker does not reappear on the second launch of the same workspace', async () => {
+    // First launch in this test already dismissed via the previous test's state;
+    // to be deterministic, set state then relaunch.
+    fs.writeFileSync(
+      path.join(PICKER_WORKSPACE, 'clawscad.json'),
+      JSON.stringify({ agent: 'claude', agentChosen: true, checkpoints: {}, active: null })
+    );
+    await pickerApp.close().catch(() => {});
+    const prev = process.env.CLAWSCAD_DISABLE_AGENT_PICKER;
+    delete process.env.CLAWSCAD_DISABLE_AGENT_PICKER;
+    pickerApp = await electron.launch({
+      args: [path.join(APP_PATH, 'main.js'), PICKER_WORKSPACE],
+      cwd: APP_PATH,
+      env: { ...process.env, CLAWSCAD_DISABLE_AGENT_SPAWN: '1' },
+    });
+    process.env.CLAWSCAD_DISABLE_AGENT_PICKER = prev;
+    pickerPage = await pickerApp.firstWindow();
+    await pickerPage.waitForLoadState('domcontentloaded');
+    await pickerPage.waitForTimeout(800);
+    await expect(pickerPage.locator('#agent-picker')).toHaveClass(/hidden/);
   });
 });
 

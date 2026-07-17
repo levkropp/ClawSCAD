@@ -17,7 +17,7 @@
 
 ## What is ClawSCAD?
 
-ClawSCAD glues together [OpenSCAD](https://openscad.org/) and [Claude Code](https://github.com/anthropics/claude-code) into a single desktop application. Tell Claude what to build, and it writes OpenSCAD code, renders it, validates the output, and auto-iterates until the model is correct — all while you watch in a live 3D viewport.
+ClawSCAD glues together [OpenSCAD](https://openscad.org/) and either [Claude Code](https://github.com/anthropics/claude-code) or [OpenCode](https://opencode.ai) into a single desktop application. Tell the agent what to build, and it writes OpenSCAD code, renders it, validates the output, and auto-iterates until the model is correct — all while you watch in a live 3D viewport.
 
 Every iteration is saved as an immutable checkpoint. You can click any checkpoint to go back, branch from it, and explore different design directions. Claude sees your full history and can reference any previous version.
 
@@ -49,13 +49,14 @@ Every iteration is saved as an immutable checkpoint. You can click any checkpoin
 - OpenSCAD error markers (red squiggles on error lines)
 
 **Claude Code Integration**
-- Embedded terminal running Claude Code
-- OpenSCAD MCP server auto-configured for every workspace
+- Embedded terminal running Claude Code or [OpenCode](https://opencode.ai) (toggle per workspace via the app menu)
+- OpenSCAD MCP server auto-configured for every workspace (`.claude/settings.json` for Claude Code, `opencode.json` for OpenCode)
 - CLAUDE.md with mandatory rules: never overwrite files, use colors, validate with MCP tools
-- Auto-iteration: when a render fails, ClawSCAD writes errors to RENDER_ERRORS.md and nudges Claude to fix them
-- Session management: browse, resume, or start new Claude sessions
-- Dual terminal support (up to 2 Claude instances)
-- Multi-window support (up to 4 projects, Claude sees all workspaces)
+- Vision-aware rules: when the active OpenCode model can't view images, ClawSCAD rewrites CLAUDE.md to drop the image-only MCP tools (render_single / render_perspectives) and tells the agent to verify programmatically
+- Auto-iteration: when a render fails, ClawSCAD writes errors to RENDER_ERRORS.md and nudges the agent to fix them
+- Session management: browse, resume, or start new sessions (Claude `--resume` / OpenCode `-s`)
+- Dual terminal support (up to 2 instances)
+- Multi-window support (up to 4 projects, agent sees all workspaces)
 
 **Export**
 - STL, 3MF, and PNG export buttons in the header
@@ -75,6 +76,7 @@ npm start
 - [Node.js](https://nodejs.org/) 18+
 - [OpenSCAD](https://openscad.org/downloads.html) installed and in PATH (or set `OPENSCAD_BINARY` env var)
 - [Claude Code](https://github.com/anthropics/claude-code) installed globally: `npm install -g @anthropic-ai/claude-code`
+  - Or [OpenCode](https://opencode.ai) if you prefer that backend (ClawSCAD auto-detects which is installed; toggle via *ClawSCAD → Agent* in the app menu)
 
 ## Usage
 
@@ -118,7 +120,7 @@ ClawSCAD
 
 - **Rendering**: OpenSCAD CLI (`openscad -o output.3mf input.scad`), tries 3MF first (preserves colors), falls back to STL
 - **3D engine**: three.js with MeshStandardMaterial, RoomEnvironment, EdgesGeometry, raycaster picking
-- **Terminal**: xterm.js + node-pty, spawns `claude` directly
+- **Terminal**: xterm.js + node-pty, spawns `claude` (or `opencode`) directly
 - **Editor**: Monaco with custom Monarch grammar for OpenSCAD
 - **MCP**: Spawns `openscad-mcp-server` as a JSON-RPC subprocess for direct render/validate access
 

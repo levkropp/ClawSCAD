@@ -1059,7 +1059,7 @@ function renderTree() {
 
   if (Object.keys(checkpoints).length === 0) {
     treeEl.innerHTML =
-      '<div class="cp-empty">No checkpoints yet.<br>Ask Claude to create a model!</div>';
+      '<div class="cp-empty">No checkpoints yet.<br>Ask the agent to create a model!</div>';
     return;
   }
 
@@ -1513,6 +1513,9 @@ appMenu.addEventListener('click', async (e) => {
     case 'open-in-files':
       window.api.openInFiles();
       break;
+    case 'toggle-agent':
+      await switchAgent();
+      break;
     case 'screenshot':
       document.getElementById('btn-screenshot').click();
       break;
@@ -1536,6 +1539,120 @@ appMenu.addEventListener('click', async (e) => {
       break;
   }
 });
+
+// ── Agent Backend (Claude Code vs OpenCode) ─────────────────────────────
+// Reflects the main process state: panel label, menu toggle label, model +
+// vision badge. Switching the backend restarts the terminal with the other
+// CLI and rewrites CLAUDE.md (vision-off path strips image-tool guidance).
+
+let currentAgentState = { agent: 'claude', model: null, visionSupported: true };
+
+function formatAgentLabel(agent) {
+  return agent === 'opencode' ? 'OpenCode' : 'Claude Code';
+}
+
+function applyAgentInfo(info) {
+  if (!info) return;
+  currentAgentState = info;
+  const label = formatAgentLabel(info.agent);
+  // Terminal pane labels
+  const paneLabel = document.getElementById('terminal-agent-label');
+  if (paneLabel) paneLabel.textContent = label;
+  const pane2Label = document.getElementById('terminal-agent2-label');
+  if (pane2Label) pane2Label.textContent = label + ' 2';
+  // Menu item
+  const menuSpan = document.getElementById('agent-name');
+  if (menuSpan) menuSpan.textContent = label;
+  // Vision badge (model + "no-vision")
+  const meta = document.getElementById('terminal-agent-meta');
+  if (meta) {
+    if (info.agent === 'opencode' && info.model) {
+      meta.classList.remove('hidden');
+      meta.textContent = info.visionSupported
+        ? info.model + ' · vision'
+        : info.model + ' · no-vision';
+      meta.classList.toggle('no-vision', !info.visionSupported);
+    } else {
+      meta.classList.add('hidden');
+      meta.textContent = '';
+    }
+  }
+}
+
+async function refreshAgentInfo() {
+  try {
+    const info = await window.api.getAgent();
+    applyAgentInfo(info);
+  } catch {}
+}
+
+async function switchAgent() {
+  // Determine the target agent. We prefer toggling to the other one, but if
+  // the other backend's CLI isn't installed we keep the user on the current
+  // one and surface a toast so the switch isn't a silent no-op.
+  let available = { claude: true, opencode: true };
+  try { available = await window.api.getAvailableAgents(); } catch {}
+  const target = currentAgentState.agent === 'opencode' ? 'claude' : 'opencode';
+  if (!available[target]) {
+    showToast(`${formatAgentLabel(target)} CLI not found — install it then try again`, 'error');
+    return;
+  }
+  await window.api.setAgent(target);
+  applyAgentInfo({
+    agent: target,
+    model: target === 'opencode' ? currentAgentState.model : null,
+    visionSupported: target === 'claude' ? true : false,
+  });
+  showToast(`Switched to ${formatAgentLabel(target)} — terminal restarted`, 'success');
+}
+
+window.api.onAgentInfo((info) => applyAgentInfo(info));
+refreshAgentInfo();
+
+// ── First-run Agent Picker ─────────────────────────────────────────────
+// Shown once per workspace (until the user picks a backend). Greys out any
+// backend whose CLI isn't installed so the picker can't strand the user in
+// a non-functional state. Selecting an option calls setAgent, which marks
+// agentChosen in the state file and restarts the terminal with the CLI.
+
+const agentPicker = document.getElementById('agent-picker');
+
+async function showAgentPicker() {
+  if (!agentPicker) return;
+  let available = { claude: true, opencode: true };
+  try { available = await window.api.getAvailableAgents(); } catch {}
+  agentPicker.querySelectorAll('.agent-option').forEach((btn) => {
+    const agent = btn.dataset.agent;
+    const avail = !!available[agent];
+    btn.classList.toggle('disabled', !avail);
+    const tag = btn.querySelector('.agent-option-avail');
+    if (tag) tag.textContent = avail ? 'installed' : 'not installed';
+  });
+  agentPicker.classList.remove('hidden');
+}
+
+function hideAgentPicker() {
+  if (agentPicker) agentPicker.classList.add('hidden');
+}
+
+agentPicker?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.agent-option');
+  if (!btn) return;
+  if (btn.classList.contains('disabled')) return;
+  const agent = btn.dataset.agent;
+  hideAgentPicker();
+  await window.api.setAgent(agent);
+  // setAgent emits agent:info via the main process; applyAgentInfo will update
+  // the pane label + menu label + vision badge from that event.
+  applyAgentInfo({
+    agent,
+    model: agent === 'opencode' ? currentAgentState.model : null,
+    visionSupported: agent === 'claude' ? true : false,
+  });
+  showToast(`Starting ${formatAgentLabel(agent)}…`, 'info');
+});
+
+window.api.onAgentPick(() => showAgentPicker());
 
 // ── Color Swatches ──────────────────────────────────────────────────────
 

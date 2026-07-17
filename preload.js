@@ -37,6 +37,13 @@ contextBridge.exposeInMainWorld('api', {
   restoreCheckpointSession: (id) => ipcRenderer.invoke('checkpoint:restore-session', id),
   onCheckpointUpdate: (cb) => ipcRenderer.on('checkpoint:update', (_, data) => cb(data)),
 
+  // Agent backend (Claude Code vs OpenCode)
+  getAgent: () => ipcRenderer.invoke('agent:get'),
+  setAgent: (agent) => ipcRenderer.invoke('agent:set', agent),
+  getAvailableAgents: () => ipcRenderer.invoke('agent:available'),
+  onAgentInfo: (cb) => ipcRenderer.on('agent:info', (_, data) => cb(data)),
+  onAgentPick: (cb) => ipcRenderer.on('agent:request-pick', () => cb()),
+
   // Files
   readFile: (filePath) => ipcRenderer.invoke('file:read', filePath),
   readModelFile: (filePath, format) => ipcRenderer.invoke('file:read-model', filePath, format),

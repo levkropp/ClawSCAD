@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const pty = require('node-pty');
 const chokidar = require('chokidar');
-const { execFile, spawn } = require('child_process');
+const { execFile, spawn, spawnSync } = require('child_process');
 
 // Resolve the OpenSCAD binary: prefer bundled copy, fall back to env / system.
 // In packaged builds, extraResources lands at process.resourcesPath.
@@ -48,6 +48,62 @@ function resolveClaude() {
     }
   }
   return null;
+}
+
+// Resolve the OpenCode CLI binary. Mirrors resolveClaude() so the two agents are
+// interchangeable. Returns null if not found — startTerminal falls back to a
+// shell in that case so the user sees a helpful hint instead of a crash.
+let _opencodeBin = null;
+function resolveOpencode() {
+  if (_opencodeBin) return _opencodeBin;
+  const candidates = [
+    path.join(os.homedir(), '.local', 'bin', 'opencode'),
+    '/opt/homebrew/bin/opencode',
+    '/usr/local/bin/opencode',
+  ];
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    candidates.push(path.join(dir, 'opencode'));
+  }
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const c of candidates) {
+    for (const ext of exts) {
+      try { if (fs.existsSync(c + ext)) { _opencodeBin = c + ext; return c + ext; } } catch {}
+    }
+  }
+  return null;
+}
+
+// Pick the agent backend for a workspace. Defaults to claude when both are
+// installed (preserves existing behavior), falls back to opencode, and finally
+// to claude when neither is present so the existing install-hint fires.
+function defaultAgent() {
+  if (resolveClaude()) return 'claude';
+  if (resolveOpencode()) return 'opencode';
+  return 'claude';
+}
+
+// Per-agent CLI specifics: binary resolver, resume/continue arg mappings.
+// Claude Code and OpenCode share `--continue`/`-c` for "continue last session";
+// resume differs (`--resume <id>` vs `-s <id>`), so we normalize here.
+const AGENT_SPECS = {
+  claude: {
+    name: 'Claude Code',
+    bin: () => resolveClaude(),
+    installUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
+    continueArgs: () => ['--continue'],
+    resumeArgs: (id) => ['--resume', id],
+  },
+  opencode: {
+    name: 'OpenCode',
+    bin: () => resolveOpencode(),
+    installUrl: 'https://opencode.ai/docs',
+    continueArgs: () => ['-c'],
+    resumeArgs: (id) => ['-s', id],
+  },
+};
+
+function agentSpec(ctx) {
+  return AGENT_SPECS[ctx && ctx.state && ctx.state.agent] || AGENT_SPECS.claude;
 }
 
 // Interactive shell to fall back to when Claude can't be launched. On Windows
@@ -253,15 +309,41 @@ function openWindow(wsDir) {
 
   win.loadFile('index.html');
 
-  initWorkspace(ctx);
+  // Order matters: loadState first so ctx.state.agent is available to
+  // initWorkspace() (it writes opencode.json only when agent==='opencode'),
+  // then refresh vision and the rules file before the terminal spawns.
   loadState(ctx);
-  startTerminal(ctx);
+  initWorkspace(ctx);
+  if (ctx.firstRun) {
+    // Don't pre-spawn an agent on first run — the picker decides which CLI
+    // to launch. Drop into a plain shell so the right pane isn't blank, and
+    // let `agent:set` (from the picker) do the real launch + vision refresh.
+    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
+    ctx.ptyProcess.onExit(() => {});
+  } else {
+    refreshAgent(ctx);
+    startTerminal(ctx);
+  }
   startFileWatcher(ctx);
 
   win.setTitle(`ClawSCAD — ${ctx.workspaceDir}`);
 
   win.webContents.once('did-finish-load', () => {
     sendCheckpoints(ctx);
+    if (ctx.firstRun) {
+      // Ask the renderer to present the harness picker. It calls agent:set,
+      // which marks agentChosen=true, restarts the terminal with the chosen
+      // CLI, and refreshes vision/CLAUDE.md.
+      ctxSend(ctx, 'agent:request-pick', null);
+    } else {
+      // Push the resolved agent/model info to the renderer now that it can
+      // receive events (refreshAgent ran before the window was ready).
+      ctxSend(ctx, 'agent:info', {
+        agent: ctx.state.agent,
+        model: ctx.modelLabel || null,
+        visionSupported: !!ctx.visionSupported,
+      });
+    }
     if (ctx.state.active && ctx.state.checkpoints[ctx.state.active]) {
       const cp = ctx.state.checkpoints[ctx.state.active];
       sendFileContent(ctx, cp.file);
@@ -294,7 +376,15 @@ function openWindow(wsDir) {
 
 // ── Workspace Init ──────────────────────────────────────────────────────
 
-const CLAUDE_MD_RULES = `## File Rules (NEVER break these)
+// Workspace rules shared by both Claude Code and OpenCode. Claude Code reads
+// CLAUDE.md natively; OpenCode reads CLAUDE.md as a fallback when no AGENTS.md
+// is present (Claude Code compatibility), so a single file drives both agents.
+//
+// The "vision" branch controls whether image-returning MCP tools are offered.
+// When the active model can't view images (e.g. a text-only opencode model),
+// we tell the agent to skip render_single/render_perspectives/render_scad_png
+// and rely on validate_scad + analyze_model instead.
+const RULES_FILE = `## File Rules (NEVER break these)
 - **NEVER modify or overwrite an existing .scad file.** Every .scad file is an immutable checkpoint. Overwriting one destroys the user's version history. Always create a NEW file.
 - **Name each .scad file** with a short creative descriptive name in kebab-case (max 30 characters, no sequential numbers). The name should hint at what changed. Good: \`hollow-shaft-gear.scad\`, \`rounded-blue-body.scad\`, \`tapered-legs-v2.scad\`. Bad: \`model_003.scad\`, \`update.scad\`.
 - **First line of every .scad file MUST be a comment** describing what this version adds or changes, e.g.: \`// Hollowed center, added 6 bolt holes around the flange\`. This is shown to the user as a tooltip in the checkpoint history.
@@ -307,9 +397,9 @@ color([0.8, 0.2, 0.1]) accent_ring();
 color("#44cc88", 0.8) transparent_cover();
 \`\`\`
 Supported formats: named colors (CSS/SVG names like "Red", "SteelBlue", "Gold"), \`[r,g,b]\` floats 0-1, \`[r,g,b,a]\` with alpha, hex \`"#rrggbb"\`, \`"#rrggbbaa"\`.
-When the user asks to change colors, create a new file (never modify the old one) with the color changes.
+When the user asks to change colors, create a new file (never modify the old one) with the color changes.`;
 
-## Workflow
+const RULES_WORKFLOW_VISION = `## Workflow
 1. Read \`active.scad\` to understand the current model
 2. Create a new .scad file building on it (never modify the original)
 3. **Use the OpenSCAD MCP server to validate your work** — this is critical:
@@ -330,15 +420,47 @@ You have access to the \`openscad\` MCP server with these tools — **use them p
 - \`check_openscad\` — verify OpenSCAD is installed and working
 - \`get_libraries\` — discover installed OpenSCAD libraries
 
-**Always render and visually verify your output.** Don't just write code and hope — use the MCP tools to see the result and iterate if needed.
+**Always render and visually verify your output.** Don't just write code and hope — use the MCP tools to see the result and iterate if needed.`;
 
-## Auto-Iteration
+const RULES_WORKFLOW_NO_VISION = `## Workflow
+1. Read \`active.scad\` to understand the current model
+2. Create a new .scad file building on it (never modify the original)
+3. **Validate programmatically with the OpenSCAD MCP server**:
+   - Use \`validate_scad\` to check syntax before rendering (saves time)
+   - Use \`analyze_model\` to check bounding box, dimensions, and triangle count match what the user asked for
+   - If validation reports a problem, create a NEW fixed .scad file (still never modify the broken one)
+4. The app auto-detects new .scad files and adds them to the checkpoint history tree
+5. Users can click any checkpoint to go back and branch from it — every file is permanent
+
+## MCP Tools Available
+You have access to the \`openscad\` MCP server. **Your current model cannot view images**, so do NOT call \`render_single\`, \`render_perspectives\`, \`render_scad_png\`, or any other image-returning tool — you won't be able to see its output. Rely only on:
+- \`validate_scad\` — check syntax before rendering (saves time)
+- \`analyze_model\` — get bounding box, dimensions, triangle count
+- \`export\` — export to STL, 3MF, AMF, etc.
+- \`check_openscad\` — verify OpenSCAD is installed and working
+- \`get_libraries\` — discover installed OpenSCAD libraries
+
+ClawSCAD renders every new .scad file automatically in the user's 3D viewport; the user inspects the result, not you. **Verify correctness programmatically** with \`validate_scad\` + \`analyze_model\` instead of visual inspection.`;
+
+const RULES_AUTOITERATION = `## Auto-Iteration
 ClawSCAD automatically validates your .scad files when they are created. If a render fails:
 - Errors are written to \`RENDER_ERRORS.md\` in this workspace
 - You will receive a message asking you to fix the issue
 - **Read RENDER_ERRORS.md**, understand the problem, and create a NEW fixed .scad file
 - Keep iterating until the render succeeds — don't present broken models to the user
 - Only stop when you have a clean render with no errors`;
+
+// Compose the full rules body for a workspace. Vision-aware: when the active
+// model can't view images we strip the visual-inspection workflow and the
+// image-returning MCP tools so the agent doesn't waste calls it can't consume.
+function buildRules(ctx) {
+  const vision = ctx.visionSupported;
+  return (
+    RULES_FILE + '\n\n' +
+    (vision ? RULES_WORKFLOW_VISION : RULES_WORKFLOW_NO_VISION) + '\n\n' +
+    RULES_AUTOITERATION
+  );
+}
 
 function updateAllClaudeMd() {
   // Filter out destroyed windows
@@ -351,7 +473,7 @@ function updateAllClaudeMd() {
 
 function writeClaudeMd(ctx, allWorkspaces) {
   const others = allWorkspaces.filter((w) => w !== ctx.workspaceDir);
-  let md = `# ClawSCAD Workspace — MANDATORY RULES\n\n${CLAUDE_MD_RULES}\n`;
+  let md = `# ClawSCAD Workspace — MANDATORY RULES\n\n${buildRules(ctx)}\n`;
 
   if (others.length > 0) {
     md += `\n## Multi-Project Context\n`;
@@ -374,7 +496,7 @@ function writeClaudeMd(ctx, allWorkspaces) {
 function initWorkspace(ctx) {
   fs.mkdirSync(ctx.workspaceDir, { recursive: true });
 
-  // MCP server config — merge into existing settings
+  // Claude Code MCP server config — merge into existing settings
   const claudeDir = path.join(ctx.workspaceDir, '.claude');
   const settingsFile = path.join(claudeDir, 'settings.json');
   fs.mkdirSync(claudeDir, { recursive: true });
@@ -392,6 +514,127 @@ function initWorkspace(ctx) {
     env: { OPENSCAD_PATH: OPENSCAD_BIN },
   };
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+
+  // OpenCode MCP config — only written when opencode is the active agent.
+  // Same openscad-mcp-server, but in opencode.json's `mcp` schema. Merged
+  // into any existing opencode.json so user customizations are preserved.
+  if (ctx.state && ctx.state.agent === 'opencode') writeOpencodeMcp(ctx);
+}
+
+// Write/merge the openscad MCP server into opencode.json. We never blow away
+// existing keys (model/permissions/etc.) — only ensure `mcp.openscad` points
+// at our bundled OpenSCAD binary.
+function writeOpencodeMcp(ctx) {
+  const cfgPath = path.join(ctx.workspaceDir, 'opencode.json');
+  let cfg = {};
+  try {
+    if (fs.existsSync(cfgPath)) cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+  } catch {}
+  if (!cfg.$schema) cfg.$schema = 'https://opencode.ai/config.json';
+  if (!cfg.mcp || typeof cfg.mcp !== 'object') cfg.mcp = {};
+  cfg.mcp.openscad = {
+    type: 'local',
+    command: ['npx', '-y', 'openscad-mcp-server'],
+    environment: { OPENSCAD_PATH: OPENSCAD_BIN },
+    enabled: true,
+  };
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+}
+
+// ── OpenCode model + vision detection ─────────────────────────────────────
+// Resolve the configured opencode model ("provider/model") and whether it
+// can view images. Uses `opencode debug config` (merged project config) and
+// `opencode models <provider> --verbose` (NDJSON-ish model metadata with a
+// `capabilities.input.image` boolean). Falls back to {vision: false} on any
+// error so a non-vision model never gets handed image tools.
+function opencodeResolvedModel(ctx) {
+  const r = spawnSync('opencode', ['debug', 'config'], {
+    cwd: ctx.workspaceDir, encoding: 'utf-8', timeout: 10000,
+  });
+  if (r.error || r.status !== 0 || !r.stdout) return null;
+  try {
+    const cfg = JSON.parse(r.stdout);
+    return cfg.model || null;
+  } catch { return null; }
+}
+
+// Parse `opencode models <provider> --verbose` output. Each model appears
+// as a header line `provider/model` immediately followed by a pretty-printed
+// JSON object on its own line block. We scan for the header that matches and
+// accumulate the JSON until it parses.
+function parseOpencodeModelsVerbose(stdout, providerID, modelID) {
+  const lines = stdout.split('\n');
+  let header = null;
+  let buf = [];
+  const flush = () => {
+    if (!header) return null;
+    const [p, m] = header.split('/');
+    if (p === providerID && m === modelID) {
+      try { return JSON.parse(buf.join('\n')); } catch { return null; }
+    }
+    return null;
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    const isHeader =
+      /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(trimmed) &&
+      lines[i + 1] && lines[i + 1].trim().startsWith('{');
+    if (isHeader) {
+      const found = flush();
+      if (found) return found;
+      header = trimmed;
+      buf = [];
+    } else if (header) {
+      buf.push(lines[i]);
+    }
+  }
+  return flush();
+}
+
+function resolveOpencodeVision(ctx) {
+  const model = opencodeResolvedModel(ctx);
+  if (!model) return { model: null, visionSupported: false };
+  const slash = model.indexOf('/');
+  if (slash <= 0) return { model, visionSupported: false };
+  const providerID = model.slice(0, slash);
+  const modelID = model.slice(slash + 1);
+  const r = spawnSync('opencode', ['models', providerID, '--verbose'], {
+    encoding: 'utf-8', timeout: 15000,
+  });
+  if (r.error || r.status !== 0 || !r.stdout) return { model, visionSupported: false };
+  const entry = parseOpencodeModelsVerbose(r.stdout, providerID, modelID);
+  const img = entry && entry.capabilities && entry.capabilities.input && entry.capabilities.input.image;
+  return { model, visionSupported: !!img };
+}
+
+// Refresh vision flag for the active agent, persist it, and notify renderer.
+// Claude Code is assumed to always support images (Sonnet/Opus do).
+async function refreshAgent(ctx) {
+  if (!ctx) return;
+  if (ctx.state.agent === 'opencode') {
+    try {
+      const info = resolveOpencodeVision(ctx);
+      ctx.visionSupported = info.visionSupported;
+      ctx.modelLabel = info.model;
+      ctx.state.visionSupported = info.visionSupported;
+      ctx.state.model = info.model || '';
+      saveState(ctx);
+    } catch {
+      ctx.visionSupported = false;
+    }
+  } else {
+    ctx.visionSupported = true;
+    ctx.modelLabel = null;
+    ctx.state.visionSupported = true;
+    ctx.state.model = '';
+    saveState(ctx);
+  }
+  updateAllClaudeMd();
+  ctxSend(ctx, 'agent:info', {
+    agent: ctx.state.agent,
+    model: ctx.modelLabel || null,
+    visionSupported: !!ctx.visionSupported,
+  });
 }
 
 // ── State Management ────────────────────────────────────────────────────
@@ -401,12 +644,31 @@ function statePath(ctx) {
 }
 
 function loadState(ctx) {
+  const stateExisted = fs.existsSync(statePath(ctx));
   try {
-    if (fs.existsSync(statePath(ctx))) {
+    if (stateExisted) {
       ctx.state = JSON.parse(fs.readFileSync(statePath(ctx), 'utf-8'));
     }
   } catch {
     ctx.state = { checkpoints: {}, active: null };
+  }
+  // Ensure agent is set. Persisted state from older versions won't have it,
+  // and we don't want to overwrite a user's choice by defaulting in memory
+  // without saving — so only default/sanitize, and let saveState persist.
+  if (!ctx.state.agent || !AGENT_SPECS[ctx.state.agent]) ctx.state.agent = defaultAgent();
+  // Vision: claude always supports it; opencode defaults to unknown (false)
+  // until refreshAgent() resolves the actual capability.
+  ctx.visionSupported = ctx.state.agent === 'claude' ? true : !!ctx.state.visionSupported;
+  ctx.modelLabel = ctx.state.model || null;
+  // First-run detection: a brand-new workspace has no state file, or an older
+  // state file that predates the agent picker. In either case the renderer
+  // shows a one-time picker so the user chooses Claude Code vs OpenCode
+  // instead of silently landing on the default. The test suite opts out via
+  // CLAWSCAD_DISABLE_AGENT_PICKER so the modal overlay can't block clicks.
+  ctx.firstRun = !stateExisted || ctx.state.agentChosen !== true;
+  if (process.env.CLAWSCAD_DISABLE_AGENT_PICKER === '1') {
+    ctx.firstRun = false;
+    ctx.state.agentChosen = true;
   }
 }
 
@@ -439,6 +701,7 @@ function getEncodedCwd(dir) {
 }
 
 function detectCurrentSessionId(ctx) {
+  if (ctx.state.agent === 'opencode') return opencodeDiscoverSessions(ctx)[0]?.sessionId || null;
   const encoded = getEncodedCwd(ctx.workspaceDir);
   const projectDir = path.join(os.homedir(), '.claude', 'projects', encoded);
   try {
@@ -646,6 +909,7 @@ function sendFileContent(ctx, scadFilename) {
 // ── Session Discovery ───────────────────────────────────────────────────
 
 function discoverSessions(ctx) {
+  if (ctx.state.agent === 'opencode') return opencodeDiscoverSessions(ctx);
   const encoded = getEncodedCwd(ctx.workspaceDir);
   const projectDir = path.join(os.homedir(), '.claude', 'projects', encoded);
   const sessions = [];
@@ -679,6 +943,35 @@ function discoverSessions(ctx) {
   return sessions;
 }
 
+// List opencode sessions for this workspace via `opencode session list --json`.
+// Sessions are global, but each carries a `directory` field (the project root
+// at creation) which we filter on so multi-project workspaces stay separate.
+// Output shape mirrors the claude discovery above so the renderer is agnostic.
+function opencodeDiscoverSessions(ctx) {
+  const sessions = [];
+  try {
+    const r = spawnSync('opencode', ['session', 'list', '--format', 'json'], {
+      cwd: ctx.workspaceDir, encoding: 'utf-8', timeout: 10000,
+    });
+    if (r.error || r.status !== 0 || !r.stdout) return sessions;
+    const arr = JSON.parse(r.stdout);
+    const want = path.resolve(ctx.workspaceDir);
+    for (const s of (Array.isArray(arr) ? arr : [])) {
+      if (s.directory && path.resolve(s.directory) !== want) continue;
+      const title = (s.title || '').toString();
+      const mtime = s.updated || s.created || Date.now();
+      sessions.push({
+        sessionId: s.id,
+        firstMessage: title.substring(0, 80),
+        lastModified: mtime,
+        date: new Date(mtime).toISOString(),
+      });
+    }
+    sessions.sort((a, b) => b.lastModified - a.lastModified);
+  } catch {}
+  return sessions;
+}
+
 // ── Terminal ────────────────────────────────────────────────────────────
 
 function spawnPty(ctx, cmd, args = []) {
@@ -705,23 +998,32 @@ function spawnPty2(ctx, cmd, args = []) {
   return proc;
 }
 
-// Spawn a pty running the Claude Code CLI. If the binary can't be found (or
-// fails to launch), drop the user into a normal shell with a hint on how to
-// install it — we don't silently install global npm packages on their behalf.
-function spawnClaude(ctx, args = []) {
-  const bin = resolveClaude();
+// Spawn a pty running the configured agent CLI (Claude Code or OpenCode). If
+// the binary can't be found (or fails to launch), drop the user into a normal
+// shell with a hint on how to install it — we don't silently install global
+// npm packages on their behalf.
+function spawnAgent(ctx, args = []) {
+  const spec = agentSpec(ctx);
+  // Test/probe hook: when CLAWSCAD_DISABLE_AGENT_SPAWN=1 is set, skip
+  // launching the agent TUI entirely and fall back to a plain shell. Used by
+  // the Playwright suite to verify IPC/config side effects without risking a
+  // long-lived TUI process that can stall worker teardown.
+  if (process.env.CLAWSCAD_DISABLE_AGENT_SPAWN === '1') {
+    return spawnPty(ctx, DEFAULT_SHELL, []);
+  }
+  const bin = spec.bin();
   if (bin) {
     try { return spawnPty(ctx, bin, args); } catch {}
   }
   const proc = spawnPty(ctx, DEFAULT_SHELL, []);
   ctxSend(ctx, 'terminal:data',
-    '\r\n\x1b[33mClaude Code CLI not found.\x1b[0m Install it from ' +
-    'https://docs.claude.com/en/docs/claude-code/setup then restart the terminal.\r\n\r\n');
+    `\r\n\x1b[33m${spec.name} CLI not found.\x1b[0m Install it from ` +
+    `${spec.installUrl} then restart the terminal.\r\n\r\n`);
   return proc;
 }
 
 function startTerminal(ctx) {
-  ctx.ptyProcess = spawnClaude(ctx, []);
+  ctx.ptyProcess = spawnAgent(ctx, []);
   ctx.ptyProcess.onExit(() => {
     ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
     ctx.ptyProcess.onExit(() => {});
@@ -730,7 +1032,7 @@ function startTerminal(ctx) {
 
 function restartTerminal(ctx, args = []) {
   if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
-  ctx.ptyProcess = spawnClaude(ctx, args);
+  ctx.ptyProcess = spawnAgent(ctx, args);
   ctx.ptyProcess.onExit(() => {
     ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
     ctx.ptyProcess.onExit(() => {});
@@ -784,8 +1086,15 @@ ipcMain.on('terminal:input', (event, data) => {
 ipcMain.handle('terminal2:spawn', (event) => {
   const ctx = getCtx(event);
   if (!ctx || ctx.ptyProcess2) return;
+  const spec = agentSpec(ctx);
+  if (process.env.CLAWSCAD_DISABLE_AGENT_SPAWN === '1') {
+    ctx.ptyProcess2 = spawnPty2(ctx, DEFAULT_SHELL, []);
+    ctx.ptyProcess2.onExit(() => { ctx.ptyProcess2 = null; });
+    return;
+  }
+  const bin = spec.bin() || (spec.name === 'OpenCode' ? 'opencode' : 'claude');
   try {
-    ctx.ptyProcess2 = spawnPty2(ctx, resolveClaude() || 'claude', []);
+    ctx.ptyProcess2 = spawnPty2(ctx, bin, []);
   } catch {
     ctx.ptyProcess2 = spawnPty2(ctx, DEFAULT_SHELL, []);
   }
@@ -855,12 +1164,12 @@ ipcMain.handle('sessions:new', (event) => {
 
 ipcMain.handle('sessions:continue', (event) => {
   const ctx = getCtx(event);
-  if (ctx) restartTerminal(ctx, ['--continue']);
+  if (ctx) restartTerminal(ctx, agentSpec(ctx).continueArgs());
 });
 
 ipcMain.handle('sessions:resume', (event, sessionId) => {
   const ctx = getCtx(event);
-  if (ctx) restartTerminal(ctx, ['--resume', sessionId]);
+  if (ctx) restartTerminal(ctx, agentSpec(ctx).resumeArgs(sessionId));
 });
 
 ipcMain.handle('checkpoint:select', (event, id) => {
@@ -873,7 +1182,7 @@ ipcMain.handle('checkpoint:restore-session', (event, id) => {
   if (!ctx) return false;
   const cp = ctx.state.checkpoints[id];
   if (cp && cp.sessionId) {
-    restartTerminal(ctx, ['--resume', cp.sessionId]);
+    restartTerminal(ctx, agentSpec(ctx).resumeArgs(cp.sessionId));
     return true;
   }
   return false;
@@ -900,6 +1209,61 @@ ipcMain.handle('checkpoint:delete', (event, id) => {
   saveState(ctx);
   sendCheckpoints(ctx);
 });
+
+// ── Agent Backend Selection ─────────────────────────────────────────────
+// Per-workspace switch between Claude Code and OpenCode. Persisted in the
+// state file, applied by re-initializing workspace configs (writes/refreshes
+// opencode.json), rewriting CLAUDE.md vision rules, and restarting the
+// terminal with the correct binary + resume flag conventions.
+
+ipcMain.handle('agent:get', (event) => {
+  const ctx = getCtx(event);
+  if (!ctx) return { agent: 'claude', model: null, visionSupported: true };
+  return {
+    agent: ctx.state.agent,
+    model: ctx.modelLabel || null,
+    visionSupported: !!ctx.visionSupported,
+  };
+});
+
+ipcMain.handle('agent:set', (event, agent) => {
+  const ctx = getCtx(event);
+  if (!ctx) return false;
+  if (agent !== 'claude' && agent !== 'opencode') return false;
+  // The user has now explicitly chosen a backend — record it so the
+  // first-run picker doesn't reappear on subsequent launches of this
+  // workspace, and so this window's firstRun flag is cleared.
+  ctx.state.agentChosen = true;
+  ctx.firstRun = false;
+  if (ctx.state.agent === agent) {
+    // Nothing to switch, but still refresh vision in case the model changed.
+    saveState(ctx);
+    refreshAgent(ctx);
+    return true;
+  }
+  ctx.state.agent = agent;
+  ctx.state.visionSupported = agent === 'claude' ? true : false;
+  ctx.state.model = '';
+  ctx.visionSupported = ctx.state.visionSupported;
+  ctx.modelLabel = null;
+  saveState(ctx);
+  // Re-init (re)writes opencode.json based on the new agent, then refresh
+  // vision/model and CLAUDE.md before relaunching the terminal.
+  initWorkspace(ctx);
+  refreshAgent(ctx);
+  startTerminal(ctx);
+  ctxSend(ctx, 'agent:info', {
+    agent: ctx.state.agent,
+    model: ctx.modelLabel || null,
+    visionSupported: !!ctx.visionSupported,
+  });
+  return true;
+});
+
+ipcMain.handle('agent:available', () => ({
+  claude: !!resolveClaude(),
+  opencode: !!resolveOpencode(),
+}));
 
 // ── MCP Direct Access ───────────────────────────────────────────────────
 
@@ -973,8 +1337,9 @@ ipcMain.handle('app:open-workspace', async (event) => {
     if (ctx.fileWatcher) ctx.fileWatcher.close();
     if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
     ctx.workspaceDir = result.filePaths[0];
-    initWorkspace(ctx);
     loadState(ctx);
+    initWorkspace(ctx);
+    refreshAgent(ctx);
     startTerminal(ctx);
     startFileWatcher(ctx);
     ctx.window.setTitle(`ClawSCAD — ${ctx.workspaceDir}`);
@@ -1089,8 +1454,9 @@ ipcMain.handle('app:open-path', async (event, inputPath) => {
       if (ctx.fileWatcher) ctx.fileWatcher.close();
       if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
       ctx.workspaceDir = inputPath;
-      initWorkspace(ctx);
       loadState(ctx);
+      initWorkspace(ctx);
+      refreshAgent(ctx);
       startTerminal(ctx);
       startFileWatcher(ctx);
       ctx.window.setTitle(`ClawSCAD — ${ctx.workspaceDir}`);
