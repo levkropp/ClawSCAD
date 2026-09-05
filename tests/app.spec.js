@@ -16,8 +16,8 @@ test.beforeAll(async () => {
   execSync('npm run build:renderer', { cwd: APP_PATH, stdio: 'pipe' });
   fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
   // Don't actually launch the agent TUI during tests — we only inspect the
-  // IPC/config side effects (CLAUDE.md, opencode.json). Spawning a real
-  // claude/opencode TUI risked stalling worker teardown.
+  // IPC/config side effects (CLAUDE.md, AGENTS.md, opencode.json). Spawning a
+  // real agent TUI risks stalling worker teardown.
   process.env.CLAWSCAD_DISABLE_AGENT_SPAWN = '1';
   // Skip the first-run picker so its fullscreen overlay doesn't block the
   // UI clicks the rest of the suite relies on.
@@ -295,6 +295,16 @@ test.describe('Workspace Setup', () => {
     expect(content).toContain('MCP Tools Available');
   });
 
+  test('AGENTS.md is created with a managed ClawSCAD rules block', async () => {
+    const agentsMd = path.join(TEST_WORKSPACE, 'AGENTS.md');
+    expect(fs.existsSync(agentsMd)).toBe(true);
+    const content = fs.readFileSync(agentsMd, 'utf-8');
+    expect(content).toContain('CLAWSCAD MANAGED RULES START');
+    expect(content).toContain('MANDATORY RULES');
+    expect(content).toContain('MCP Tools Available');
+    expect(content).toContain('CLAWSCAD MANAGED RULES END');
+  });
+
   test('MCP server config is created with command and openscad path', async () => {
     const settings = path.join(TEST_WORKSPACE, '.claude', 'settings.json');
     expect(fs.existsSync(settings)).toBe(true);
@@ -331,14 +341,33 @@ test.describe('Workspace Setup', () => {
 });
 
 // ── Agent Backend Tests ──────────────────────────────────────────────
-// Toggle between Claude Code and OpenCode, verify opencode.json is written,
-// and verify CLAUDE.md vision-aware rules flip when the model can't see images.
+// Toggle between supported agents, verify their configuration, and verify
+// vision-aware rules flip when an OpenCode model can't see images.
 
 test.describe('Agent Backend', () => {
   test('agent:get returns a valid backend identifier with visionSupported', async () => {
     const info = await page.evaluate(() => window.api.getAgent());
-    expect(['claude', 'opencode']).toContain(info.agent);
+    expect(['claude', 'codex', 'opencode']).toContain(info.agent);
     expect(typeof info.visionSupported).toBe('boolean');
+  });
+
+  test('switching to codex persists it and preserves user AGENTS.md content', async () => {
+    const agentsPath = path.join(TEST_WORKSPACE, 'AGENTS.md');
+    const generated = fs.readFileSync(agentsPath, 'utf-8');
+    fs.writeFileSync(agentsPath, `# User project rules\n\nKeep this text.\n\n${generated}`);
+
+    const changed = await page.evaluate(() => window.api.setAgent('codex'));
+    expect(changed).toBe(true);
+    await page.waitForTimeout(800);
+
+    const state = JSON.parse(fs.readFileSync(path.join(TEST_WORKSPACE, 'clawscad.json'), 'utf-8'));
+    expect(state.agent).toBe('codex');
+    expect(state.visionSupported).toBe(true);
+    const agentsMd = fs.readFileSync(agentsPath, 'utf-8');
+    expect(agentsMd).toContain('# User project rules');
+    expect(agentsMd).toContain('Keep this text.');
+    expect(agentsMd.match(/CLAWSCAD MANAGED RULES START/g)).toHaveLength(1);
+    await expect(page.locator('#terminal-agent-label')).toHaveText('Codex');
   });
 
   test('switching to opencode writes opencode.json with the openscad MCP server', async () => {
@@ -403,8 +432,8 @@ test.describe('Agent Backend', () => {
     await page.locator('.agent-option[data-agent="claude"]').click();
   });
 
-  // Reset to claude for the rest of the suite so a persistent opencode state
-  // can't poison subsequent tests in this shared workspace.
+  // Reset to Claude so a persisted alternate backend cannot affect later tests
+  // in this shared workspace.
   test.afterEach(async () => {
     try { await page.evaluate(() => window.api.setAgent('claude')); } catch {}
   });
@@ -429,6 +458,7 @@ test.describe('First-run Agent Picker', () => {
     // Wipe state so each test starts first-run fresh.
     try { fs.rmSync(path.join(PICKER_WORKSPACE, 'clawscad.json'), { force: true }); } catch {}
     try { fs.rmSync(path.join(PICKER_WORKSPACE, 'CLAUDE.md'), { force: true }); } catch {}
+    try { fs.rmSync(path.join(PICKER_WORKSPACE, 'AGENTS.md'), { force: true }); } catch {}
     // Spawn the agent is fine to disable, but DO allow the picker to fire.
     const prevPick = process.env.CLAWSCAD_DISABLE_AGENT_PICKER;
     delete process.env.CLAWSCAD_DISABLE_AGENT_PICKER;
@@ -454,27 +484,37 @@ test.describe('First-run Agent Picker', () => {
   test('picker modal is visible on a fresh workspace', async () => {
     const picker = pickerPage.locator('#agent-picker');
     await expect(picker).not.toHaveClass(/hidden/);
-    // Both options should be present
+    // All supported options should be present
     await expect(pickerPage.locator('.agent-option[data-agent="claude"]')).toBeVisible();
+    await expect(pickerPage.locator('.agent-option[data-agent="codex"]')).toBeVisible();
     await expect(pickerPage.locator('.agent-option[data-agent="opencode"]')).toBeVisible();
   });
 
   test('picker options report install status via getAvailableAgents', async () => {
-    // Both options should have an avail tag populated by showAgentPicker.
+    // Every option should have an avail tag populated by showAgentPicker.
     // The exact text depends on host install state, so just assert non-empty.
     const claudeAvail = pickerPage.locator('.agent-option[data-agent="claude"] .agent-option-avail');
+    const codexAvail = pickerPage.locator('.agent-option[data-agent="codex"] .agent-option-avail');
     const openAvail = pickerPage.locator('.agent-option[data-agent="opencode"] .agent-option-avail');
     await expect(claudeAvail).not.toHaveText('');
+    await expect(codexAvail).not.toHaveText('');
     await expect(openAvail).not.toHaveText('');
     // The disabled class should match the avail text.
     const claudeText = (await claudeAvail.textContent()) || '';
+    const codexText = (await codexAvail.textContent()) || '';
     const openText = (await openAvail.textContent()) || '';
     const claudeBtn = pickerPage.locator('.agent-option[data-agent="claude"]');
+    const codexBtn = pickerPage.locator('.agent-option[data-agent="codex"]');
     const openBtn = pickerPage.locator('.agent-option[data-agent="opencode"]');
     if (claudeText.includes('not installed')) {
       await expect(claudeBtn).toHaveClass(/disabled/);
     } else {
       await expect(claudeBtn).not.toHaveClass(/disabled/);
+    }
+    if (codexText.includes('not installed')) {
+      await expect(codexBtn).toHaveClass(/disabled/);
+    } else {
+      await expect(codexBtn).not.toHaveClass(/disabled/);
     }
     if (openText.includes('not installed')) {
       await expect(openBtn).toHaveClass(/disabled/);
@@ -515,6 +555,63 @@ test.describe('First-run Agent Picker', () => {
     await pickerPage.waitForLoadState('domcontentloaded');
     await pickerPage.waitForTimeout(800);
     await expect(pickerPage.locator('#agent-picker')).toHaveClass(/hidden/);
+  });
+});
+
+// ── Codex Session Discovery Tests ───────────────────────────────────
+
+test.describe('Codex Session Discovery', () => {
+  const SESSION_WORKSPACE = path.join(os.tmpdir(), 'clawscad-codex-workspace-' + Date.now());
+  const TEST_CODEX_HOME = path.join(os.tmpdir(), 'clawscad-codex-home-' + Date.now());
+  const sessionId = '019f0000-1111-7222-8333-444444444444';
+  let sessionApp;
+
+  test.beforeAll(() => {
+    const rolloutDir = path.join(TEST_CODEX_HOME, 'sessions', '2026', '09', '05');
+    fs.mkdirSync(rolloutDir, { recursive: true });
+    fs.mkdirSync(SESSION_WORKSPACE, { recursive: true });
+    fs.writeFileSync(
+      path.join(SESSION_WORKSPACE, 'clawscad.json'),
+      JSON.stringify({ agent: 'codex', agentChosen: true, checkpoints: {}, active: null })
+    );
+    const records = [
+      { type: 'session_meta', payload: { id: sessionId, cwd: SESSION_WORKSPACE, timestamp: '2026-09-05T12:00:00.000Z' } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '<environment_context>generated context</environment_context>' }] } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Build a printable planetary gearbox' }] } },
+    ];
+    fs.writeFileSync(
+      path.join(rolloutDir, `rollout-2026-09-05T12-00-00-${sessionId}.jsonl`),
+      records.map((record) => JSON.stringify(record)).join('\n') + '\n'
+    );
+  });
+
+  test.afterAll(() => {
+    fs.rmSync(SESSION_WORKSPACE, { recursive: true, force: true });
+    fs.rmSync(TEST_CODEX_HOME, { recursive: true, force: true });
+  });
+
+  test('lists workspace-matched rollouts and skips generated context messages', async () => {
+    sessionApp = await electron.launch({
+      args: [path.join(APP_PATH, 'main.js'), SESSION_WORKSPACE],
+      cwd: APP_PATH,
+      env: {
+        ...process.env,
+        CODEX_HOME: TEST_CODEX_HOME,
+        CLAWSCAD_DISABLE_AGENT_SPAWN: '1',
+        CLAWSCAD_DISABLE_AGENT_PICKER: '1',
+      },
+    });
+    try {
+      const sessionPage = await sessionApp.firstWindow();
+      await sessionPage.waitForLoadState('domcontentloaded');
+      const sessions = await sessionPage.evaluate(() => window.api.getSessions());
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].sessionId).toBe(sessionId);
+      expect(sessions[0].firstMessage).toBe('Build a printable planetary gearbox');
+    } finally {
+      await sessionApp.close();
+      sessionApp = null;
+    }
   });
 });
 

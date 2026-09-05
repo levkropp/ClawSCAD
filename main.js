@@ -73,18 +73,51 @@ function resolveOpencode() {
   return null;
 }
 
-// Pick the agent backend for a workspace. Defaults to claude when both are
-// installed (preserves existing behavior), falls back to opencode, and finally
-// to claude when neither is present so the existing install-hint fires.
+// Resolve the OpenAI Codex CLI binary. Codex's native installer typically
+// places it in ~/.local/bin; Homebrew and npm installations are found via the
+// explicit common paths or PATH scan below.
+let _codexBin = null;
+function resolveCodex() {
+  if (_codexBin) return _codexBin;
+  const candidates = [
+    path.join(os.homedir(), '.local', 'bin', 'codex'),
+    '/opt/homebrew/bin/codex',
+    '/usr/local/bin/codex',
+  ];
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    candidates.push(path.join(dir, 'codex'));
+  }
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const c of candidates) {
+    for (const ext of exts) {
+      try { if (fs.existsSync(c + ext)) { _codexBin = c + ext; return c + ext; } } catch {}
+    }
+  }
+  return null;
+}
+
+// Codex accepts project MCP configuration as CLI overrides. Supplying these
+// per launch avoids changing the user's global config and also works before a
+// newly-created workspace has been marked trusted.
+function codexLaunchArgs() {
+  return [
+    '-c', 'mcp_servers.openscad.command="npx"',
+    '-c', 'mcp_servers.openscad.args=["-y","openscad-mcp-server"]',
+    '-c', `mcp_servers.openscad.env.OPENSCAD_PATH=${JSON.stringify(OPENSCAD_BIN)}`,
+  ];
+}
+
+// Pick the agent backend for a workspace. Preserve Claude as the first choice
+// for existing installs, then prefer Codex over OpenCode when both are present.
 function defaultAgent() {
   if (resolveClaude()) return 'claude';
+  if (resolveCodex()) return 'codex';
   if (resolveOpencode()) return 'opencode';
   return 'claude';
 }
 
-// Per-agent CLI specifics: binary resolver, resume/continue arg mappings.
-// Claude Code and OpenCode share `--continue`/`-c` for "continue last session";
-// resume differs (`--resume <id>` vs `-s <id>`), so we normalize here.
+// Per-agent CLI specifics: binary resolver, launch configuration, and
+// resume/continue mappings are normalized behind one interface.
 const AGENT_SPECS = {
   claude: {
     name: 'Claude Code',
@@ -92,6 +125,14 @@ const AGENT_SPECS = {
     installUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
     continueArgs: () => ['--continue'],
     resumeArgs: (id) => ['--resume', id],
+  },
+  codex: {
+    name: 'Codex',
+    bin: () => resolveCodex(),
+    installUrl: 'https://developers.openai.com/codex/cli',
+    launchArgs: () => codexLaunchArgs(),
+    continueArgs: () => ['resume', '--last'],
+    resumeArgs: (id) => ['resume', id],
   },
   opencode: {
     name: 'OpenCode',
@@ -102,8 +143,13 @@ const AGENT_SPECS = {
   },
 };
 
+function isKnownAgent(agent) {
+  return typeof agent === 'string' && Object.prototype.hasOwnProperty.call(AGENT_SPECS, agent);
+}
+
 function agentSpec(ctx) {
-  return AGENT_SPECS[ctx && ctx.state && ctx.state.agent] || AGENT_SPECS.claude;
+  const selected = ctx && ctx.state && ctx.state.agent;
+  return isKnownAgent(selected) ? AGENT_SPECS[selected] : AGENT_SPECS.claude;
 }
 
 // Interactive shell to fall back to when Claude can't be launched. On Windows
@@ -299,6 +345,8 @@ function openWindow(wsDir) {
     state: { checkpoints: {}, active: null },
     fileWatcher: null,
     ptyProcess: null,
+    ptyProcess2: null,
+    closing: false,
     renderQueue: [],
     isRendering: false,
     renderFormat: '3mf',
@@ -361,24 +409,28 @@ function openWindow(wsDir) {
   });
 
   win.on('closed', () => {
+    ctx.closing = true;
     if (ctx.fileWatcher) ctx.fileWatcher.close();
-    if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
-    if (ctx.ptyProcess2) try { ctx.ptyProcess2.kill(); } catch {}
+    const primary = ctx.ptyProcess;
+    const secondary = ctx.ptyProcess2;
+    ctx.ptyProcess = null;
+    ctx.ptyProcess2 = null;
+    if (primary) try { primary.kill(); } catch {}
+    if (secondary) try { secondary.kill(); } catch {}
     ctx.window = null; // Mark as destroyed so ctxSend won't touch it
     windows.delete(wcId);
-    updateAllClaudeMd();
+    updateAllAgentRules();
   });
 
-  updateAllClaudeMd();
+  updateAllAgentRules();
   addRecentPath(wsDir);
   return ctx;
 }
 
 // ── Workspace Init ──────────────────────────────────────────────────────
 
-// Workspace rules shared by both Claude Code and OpenCode. Claude Code reads
-// CLAUDE.md natively; OpenCode reads CLAUDE.md as a fallback when no AGENTS.md
-// is present (Claude Code compatibility), so a single file drives both agents.
+// Workspace rules shared by Claude Code, Codex, and OpenCode. Claude reads
+// CLAUDE.md, Codex reads AGENTS.md, and OpenCode uses the compatible rules file.
 //
 // The "vision" branch controls whether image-returning MCP tools are offered.
 // When the active model can't view images (e.g. a text-only opencode model),
@@ -462,7 +514,7 @@ function buildRules(ctx) {
   );
 }
 
-function updateAllClaudeMd() {
+function updateAllAgentRules() {
   // Filter out destroyed windows
   const live = Array.from(windows.values()).filter((c) => c.window !== null);
   const allWorkspaces = live.map((c) => c.workspaceDir);
@@ -491,6 +543,33 @@ function writeClaudeMd(ctx, allWorkspaces) {
   }
 
   fs.writeFileSync(path.join(ctx.workspaceDir, 'CLAUDE.md'), md);
+  writeAgentsMd(ctx, md);
+}
+
+const AGENTS_RULES_START = '<!-- CLAWSCAD MANAGED RULES START -->';
+const AGENTS_RULES_END = '<!-- CLAWSCAD MANAGED RULES END -->';
+
+// Codex reads AGENTS.md. Keep ClawSCAD's generated instructions in a managed
+// block so an existing project AGENTS.md can coexist without being overwritten.
+function writeAgentsMd(ctx, md) {
+  const agentsPath = path.join(ctx.workspaceDir, 'AGENTS.md');
+  const block = `${AGENTS_RULES_START}\n${md.trimEnd()}\n${AGENTS_RULES_END}`;
+  let current = '';
+  try {
+    if (fs.existsSync(agentsPath)) current = fs.readFileSync(agentsPath, 'utf-8');
+  } catch {}
+
+  const start = current.indexOf(AGENTS_RULES_START);
+  const end = current.indexOf(AGENTS_RULES_END, start + AGENTS_RULES_START.length);
+  let next;
+  if (start >= 0 && end >= start) {
+    next = current.slice(0, start) + block + current.slice(end + AGENTS_RULES_END.length);
+  } else if (current.trim()) {
+    next = `${current.trimEnd()}\n\n${block}\n`;
+  } else {
+    next = `${block}\n`;
+  }
+  fs.writeFileSync(agentsPath, next);
 }
 
 function initWorkspace(ctx) {
@@ -608,7 +687,7 @@ function resolveOpencodeVision(ctx) {
 }
 
 // Refresh vision flag for the active agent, persist it, and notify renderer.
-// Claude Code is assumed to always support images (Sonnet/Opus do).
+// Claude Code and Codex support image input; OpenCode depends on its model.
 async function refreshAgent(ctx) {
   if (!ctx) return;
   if (ctx.state.agent === 'opencode') {
@@ -629,7 +708,7 @@ async function refreshAgent(ctx) {
     ctx.state.model = '';
     saveState(ctx);
   }
-  updateAllClaudeMd();
+  updateAllAgentRules();
   ctxSend(ctx, 'agent:info', {
     agent: ctx.state.agent,
     model: ctx.modelLabel || null,
@@ -655,14 +734,14 @@ function loadState(ctx) {
   // Ensure agent is set. Persisted state from older versions won't have it,
   // and we don't want to overwrite a user's choice by defaulting in memory
   // without saving — so only default/sanitize, and let saveState persist.
-  if (!ctx.state.agent || !AGENT_SPECS[ctx.state.agent]) ctx.state.agent = defaultAgent();
-  // Vision: claude always supports it; opencode defaults to unknown (false)
+  if (!isKnownAgent(ctx.state.agent)) ctx.state.agent = defaultAgent();
+  // Vision: Claude and Codex support it; OpenCode defaults to unknown (false)
   // until refreshAgent() resolves the actual capability.
-  ctx.visionSupported = ctx.state.agent === 'claude' ? true : !!ctx.state.visionSupported;
+  ctx.visionSupported = ctx.state.agent !== 'opencode' ? true : !!ctx.state.visionSupported;
   ctx.modelLabel = ctx.state.model || null;
   // First-run detection: a brand-new workspace has no state file, or an older
   // state file that predates the agent picker. In either case the renderer
-  // shows a one-time picker so the user chooses Claude Code vs OpenCode
+  // shows a one-time picker so the user chooses an installed agent
   // instead of silently landing on the default. The test suite opts out via
   // CLAWSCAD_DISABLE_AGENT_PICKER so the modal overlay can't block clicks.
   ctx.firstRun = !stateExisted || ctx.state.agentChosen !== true;
@@ -702,6 +781,7 @@ function getEncodedCwd(dir) {
 
 function detectCurrentSessionId(ctx) {
   if (ctx.state.agent === 'opencode') return opencodeDiscoverSessions(ctx)[0]?.sessionId || null;
+  if (ctx.state.agent === 'codex') return codexDiscoverSessions(ctx)[0]?.sessionId || null;
   const encoded = getEncodedCwd(ctx.workspaceDir);
   const projectDir = path.join(os.homedir(), '.claude', 'projects', encoded);
   try {
@@ -910,6 +990,7 @@ function sendFileContent(ctx, scadFilename) {
 
 function discoverSessions(ctx) {
   if (ctx.state.agent === 'opencode') return opencodeDiscoverSessions(ctx);
+  if (ctx.state.agent === 'codex') return codexDiscoverSessions(ctx);
   const encoded = getEncodedCwd(ctx.workspaceDir);
   const projectDir = path.join(os.homedir(), '.claude', 'projects', encoded);
   const sessions = [];
@@ -940,6 +1021,106 @@ function discoverSessions(ctx) {
     }
     sessions.sort((a, b) => b.lastModified - a.lastModified);
   } catch {}
+  return sessions;
+}
+
+function codexSessionsRoot() {
+  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+  return path.join(codexHome, 'sessions');
+}
+
+function codexSessionFiles(root) {
+  const files = [];
+  const pending = [root];
+  while (pending.length > 0) {
+    const dir = pending.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      const fp = path.join(dir, entry.name);
+      if (entry.isDirectory()) pending.push(fp);
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fp);
+    }
+  }
+  return files;
+}
+
+function codexMessageText(entry) {
+  const payload = entry && entry.payload;
+  if (!payload) return '';
+  if (entry.type === 'event_msg' && payload.type === 'user_message') {
+    return typeof payload.message === 'string' ? payload.message : '';
+  }
+  if (entry.type !== 'response_item' || payload.type !== 'message' || payload.role !== 'user') return '';
+  if (typeof payload.content === 'string') return payload.content;
+  if (!Array.isArray(payload.content)) return '';
+  return payload.content
+    .filter((item) => item && (item.type === 'input_text' || item.type === 'text'))
+    .map((item) => item.text || '')
+    .join(' ');
+}
+
+function isCodexContextMessage(message) {
+  const text = message.trimStart();
+  return text.startsWith('<environment_context>') ||
+    text.startsWith('<permissions instructions>') ||
+    text.startsWith('<collaboration_mode>') ||
+    text.startsWith('<skills_instructions>');
+}
+
+// Read enough of a rollout to capture session_meta and the first real user
+// prompt without loading every (potentially very large) transcript into memory.
+function readCodexSessionHeader(fp) {
+  const maxBytes = 512 * 1024;
+  let fd;
+  try {
+    fd = fs.openSync(fp, 'r');
+    const size = Math.min(fs.fstatSync(fd).size, maxBytes);
+    const buffer = Buffer.alloc(size);
+    fs.readSync(fd, buffer, 0, size, 0);
+    const lines = buffer.toString('utf-8').split('\n');
+    let meta = null;
+    let firstMessage = '';
+    for (const line of lines) {
+      if (!line) continue;
+      let entry;
+      try { entry = JSON.parse(line); } catch { continue; }
+      if (!meta && entry.type === 'session_meta') meta = entry.payload || null;
+      if (!firstMessage) {
+        const message = codexMessageText(entry).trim();
+        if (message && !isCodexContextMessage(message)) firstMessage = message.substring(0, 80);
+      }
+      if (meta && firstMessage) break;
+    }
+    return { meta, firstMessage };
+  } catch {
+    return { meta: null, firstMessage: '' };
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch {}
+  }
+}
+
+// Codex stores rollouts below $CODEX_HOME/sessions/YYYY/MM/DD. The first
+// session_meta record includes the stable session id and cwd, allowing us to
+// expose only sessions belonging to this ClawSCAD workspace.
+function codexDiscoverSessions(ctx) {
+  const sessions = [];
+  const want = path.resolve(ctx.workspaceDir);
+  for (const fp of codexSessionFiles(codexSessionsRoot())) {
+    try {
+      const stat = fs.statSync(fp);
+      const { meta, firstMessage } = readCodexSessionHeader(fp);
+      if (!meta || !meta.id || !meta.cwd || path.resolve(meta.cwd) !== want) continue;
+      const lastModified = stat.mtimeMs;
+      sessions.push({
+        sessionId: meta.id,
+        firstMessage,
+        lastModified,
+        date: stat.mtime.toISOString(),
+      });
+    } catch {}
+  }
+  sessions.sort((a, b) => b.lastModified - a.lastModified);
   return sessions;
 }
 
@@ -998,7 +1179,7 @@ function spawnPty2(ctx, cmd, args = []) {
   return proc;
 }
 
-// Spawn a pty running the configured agent CLI (Claude Code or OpenCode). If
+// Spawn a pty running the configured agent CLI. If
 // the binary can't be found (or fails to launch), drop the user into a normal
 // shell with a hint on how to install it — we don't silently install global
 // npm packages on their behalf.
@@ -1013,7 +1194,8 @@ function spawnAgent(ctx, args = []) {
   }
   const bin = spec.bin();
   if (bin) {
-    try { return spawnPty(ctx, bin, args); } catch {}
+    const launchArgs = typeof spec.launchArgs === 'function' ? spec.launchArgs(ctx) : [];
+    try { return spawnPty(ctx, bin, [...launchArgs, ...args]); } catch {}
   }
   const proc = spawnPty(ctx, DEFAULT_SHELL, []);
   ctxSend(ctx, 'terminal:data',
@@ -1023,19 +1205,31 @@ function spawnAgent(ctx, args = []) {
 }
 
 function startTerminal(ctx) {
-  ctx.ptyProcess = spawnAgent(ctx, []);
-  ctx.ptyProcess.onExit(() => {
-    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
-    ctx.ptyProcess.onExit(() => {});
+  const proc = spawnAgent(ctx, []);
+  ctx.ptyProcess = proc;
+  proc.onExit(() => {
+    if (ctx.closing || ctx.ptyProcess !== proc) return;
+    const shellProc = spawnPty(ctx, DEFAULT_SHELL, []);
+    ctx.ptyProcess = shellProc;
+    shellProc.onExit(() => {
+      if (ctx.ptyProcess === shellProc) ctx.ptyProcess = null;
+    });
   });
 }
 
 function restartTerminal(ctx, args = []) {
-  if (ctx.ptyProcess) try { ctx.ptyProcess.kill(); } catch {}
-  ctx.ptyProcess = spawnAgent(ctx, args);
-  ctx.ptyProcess.onExit(() => {
-    ctx.ptyProcess = spawnPty(ctx, DEFAULT_SHELL, []);
-    ctx.ptyProcess.onExit(() => {});
+  const previous = ctx.ptyProcess;
+  ctx.ptyProcess = null;
+  if (previous) try { previous.kill(); } catch {}
+  const proc = spawnAgent(ctx, args);
+  ctx.ptyProcess = proc;
+  proc.onExit(() => {
+    if (ctx.closing || ctx.ptyProcess !== proc) return;
+    const shellProc = spawnPty(ctx, DEFAULT_SHELL, []);
+    ctx.ptyProcess = shellProc;
+    shellProc.onExit(() => {
+      if (ctx.ptyProcess === shellProc) ctx.ptyProcess = null;
+    });
   });
 }
 
@@ -1092,11 +1286,19 @@ ipcMain.handle('terminal2:spawn', (event) => {
     ctx.ptyProcess2.onExit(() => { ctx.ptyProcess2 = null; });
     return;
   }
-  const bin = spec.bin() || (spec.name === 'OpenCode' ? 'opencode' : 'claude');
+  const bin = spec.bin();
+  const launchArgs = typeof spec.launchArgs === 'function' ? spec.launchArgs(ctx) : [];
   try {
-    ctx.ptyProcess2 = spawnPty2(ctx, bin, []);
+    ctx.ptyProcess2 = bin
+      ? spawnPty2(ctx, bin, launchArgs)
+      : spawnPty2(ctx, DEFAULT_SHELL, []);
   } catch {
     ctx.ptyProcess2 = spawnPty2(ctx, DEFAULT_SHELL, []);
+  }
+  if (!bin) {
+    ctxSend(ctx, 'terminal2:data',
+      `\r\n\x1b[33m${spec.name} CLI not found.\x1b[0m Install it from ` +
+      `${spec.installUrl} then restart the terminal.\r\n\r\n`);
   }
   ctx.ptyProcess2.onExit(() => { ctx.ptyProcess2 = null; });
 });
@@ -1211,9 +1413,9 @@ ipcMain.handle('checkpoint:delete', (event, id) => {
 });
 
 // ── Agent Backend Selection ─────────────────────────────────────────────
-// Per-workspace switch between Claude Code and OpenCode. Persisted in the
+// Per-workspace switch between Claude Code, Codex, and OpenCode. Persisted in the
 // state file, applied by re-initializing workspace configs (writes/refreshes
-// opencode.json), rewriting CLAUDE.md vision rules, and restarting the
+// opencode.json), rewriting agent rules, and restarting the
 // terminal with the correct binary + resume flag conventions.
 
 ipcMain.handle('agent:get', (event) => {
@@ -1229,7 +1431,7 @@ ipcMain.handle('agent:get', (event) => {
 ipcMain.handle('agent:set', (event, agent) => {
   const ctx = getCtx(event);
   if (!ctx) return false;
-  if (agent !== 'claude' && agent !== 'opencode') return false;
+  if (!isKnownAgent(agent)) return false;
   // The user has now explicitly chosen a backend — record it so the
   // first-run picker doesn't reappear on subsequent launches of this
   // workspace, and so this window's firstRun flag is cleared.
@@ -1242,16 +1444,16 @@ ipcMain.handle('agent:set', (event, agent) => {
     return true;
   }
   ctx.state.agent = agent;
-  ctx.state.visionSupported = agent === 'claude' ? true : false;
+  ctx.state.visionSupported = agent !== 'opencode';
   ctx.state.model = '';
   ctx.visionSupported = ctx.state.visionSupported;
   ctx.modelLabel = null;
   saveState(ctx);
   // Re-init (re)writes opencode.json based on the new agent, then refresh
-  // vision/model and CLAUDE.md before relaunching the terminal.
+  // vision/model and rules files before relaunching the terminal.
   initWorkspace(ctx);
   refreshAgent(ctx);
-  startTerminal(ctx);
+  restartTerminal(ctx);
   ctxSend(ctx, 'agent:info', {
     agent: ctx.state.agent,
     model: ctx.modelLabel || null,
@@ -1262,6 +1464,7 @@ ipcMain.handle('agent:set', (event, agent) => {
 
 ipcMain.handle('agent:available', () => ({
   claude: !!resolveClaude(),
+  codex: !!resolveCodex(),
   opencode: !!resolveOpencode(),
 }));
 
@@ -1344,7 +1547,7 @@ ipcMain.handle('app:open-workspace', async (event) => {
     startFileWatcher(ctx);
     ctx.window.setTitle(`ClawSCAD — ${ctx.workspaceDir}`);
     sendCheckpoints(ctx);
-    updateAllClaudeMd();
+    updateAllAgentRules();
     return ctx.workspaceDir;
   }
   return null;
@@ -1461,7 +1664,7 @@ ipcMain.handle('app:open-path', async (event, inputPath) => {
       startFileWatcher(ctx);
       ctx.window.setTitle(`ClawSCAD — ${ctx.workspaceDir}`);
       sendCheckpoints(ctx);
-      updateAllClaudeMd();
+      updateAllAgentRules();
       addRecentPath(inputPath);
       return { type: 'workspace', path: inputPath };
     } else if (stat.isFile() && inputPath.endsWith('.scad')) {

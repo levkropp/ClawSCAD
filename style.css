@@ -1725,65 +1725,6 @@ body.dragging #splitter {
 
 .agent-option {
   display: block;
-  width: 100
-/* ── First-run Agent Picker ───────────────────────────────────────── */
-
-#agent-picker {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#agent-picker.hidden { display: none; }
-
-.agent-picker-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(5, 5, 15, 0.72);
-  backdrop-filter: blur(2px);
-}
-
-.agent-picker-card {
-  position: relative;
-  width: 520px;
-  max-width: calc(100vw - 32px);
-  padding: 28px 28px 22px;
-  background: #0d0d20;
-  border: 1px solid #2a2a5a;
-  border-radius: 10px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #d0d0e0;
-}
-
-.agent-picker-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #f0f0ff;
-  letter-spacing: 0.3px;
-  margin-bottom: 8px;
-}
-
-.agent-picker-sub {
-  font-size: 12px;
-  line-height: 1.5;
-  color: #8888bb;
-  margin-bottom: 20px;
-}
-
-.agent-picker-sub strong { color: #c8c8ff; font-weight: 600; }
-
-.agent-picker-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.agent-option {
-  display: block;
   width: 100%;
   text-align: left;
   padding: 14px 16px;

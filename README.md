@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>AI-powered 3D CAD environment</strong><br>
-  OpenSCAD + Claude Code with checkpoint branching, auto-iteration, and multi-viewport support
+  OpenSCAD + your coding agent with checkpoint branching, auto-iteration, and multi-viewport support
 </p>
 
 <p align="center">
@@ -17,9 +17,9 @@
 
 ## What is ClawSCAD?
 
-ClawSCAD glues together [OpenSCAD](https://openscad.org/) and either [Claude Code](https://github.com/anthropics/claude-code) or [OpenCode](https://opencode.ai) into a single desktop application. Tell the agent what to build, and it writes OpenSCAD code, renders it, validates the output, and auto-iterates until the model is correct — all while you watch in a live 3D viewport.
+ClawSCAD glues together [OpenSCAD](https://openscad.org/) and [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://developers.openai.com/codex/cli), or [OpenCode](https://opencode.ai) in a single desktop application. Tell the agent what to build, and it writes OpenSCAD code, renders it, validates the output, and auto-iterates until the model is correct — all while you watch in a live 3D viewport.
 
-Every iteration is saved as an immutable checkpoint. You can click any checkpoint to go back, branch from it, and explore different design directions. Claude sees your full history and can reference any previous version.
+Every iteration is saved as an immutable checkpoint. You can click any checkpoint to go back, branch from it, and explore different design directions. The agent sees your full history and can reference any previous version.
 
 ## Features
 
@@ -36,7 +36,7 @@ Every iteration is saved as an immutable checkpoint. You can click any checkpoin
 **Checkpoint History**
 - Every .scad file is an immutable checkpoint in a branching tree
 - Click any checkpoint to instantly load its model (cached in memory)
-- Branch from any point — Claude creates new files, never overwrites
+- Branch from any point — the agent creates new files, never overwrites
 - Collapsible tree with box-drawing connectors
 - Right-click context menu: rename, delete, collapse, view source, resume session
 - Hover tooltips showing the change description
@@ -48,13 +48,13 @@ Every iteration is saved as an immutable checkpoint. You can click any checkpoin
 - Read-only by default, toggle to edit mode
 - OpenSCAD error markers (red squiggles on error lines)
 
-**Claude Code Integration**
-- Embedded terminal running Claude Code or [OpenCode](https://opencode.ai) (toggle per workspace via the app menu)
-- OpenSCAD MCP server auto-configured for every workspace (`.claude/settings.json` for Claude Code, `opencode.json` for OpenCode)
-- CLAUDE.md with mandatory rules: never overwrite files, use colors, validate with MCP tools
-- Vision-aware rules: when the active OpenCode model can't view images, ClawSCAD rewrites CLAUDE.md to drop the image-only MCP tools (render_single / render_perspectives) and tells the agent to verify programmatically
+**AI Agent Integration**
+- Embedded terminal running Claude Code, Codex, or [OpenCode](https://opencode.ai) (select per workspace via the app menu)
+- OpenSCAD MCP server auto-configured for every workspace (`.claude/settings.json` for Claude Code, per-launch configuration for Codex, and `opencode.json` for OpenCode)
+- `CLAUDE.md` and a non-destructive managed block in `AGENTS.md` provide mandatory CAD workflow rules
+- Vision-aware rules: when the active OpenCode model can't view images, ClawSCAD drops image-only MCP tools (render_single / render_perspectives) and tells the agent to verify programmatically
 - Auto-iteration: when a render fails, ClawSCAD writes errors to RENDER_ERRORS.md and nudges the agent to fix them
-- Session management: browse, resume, or start new sessions (Claude `--resume` / OpenCode `-s`)
+- Session management: browse, resume, or start new sessions (Claude `--resume`, Codex `resume`, OpenCode `-s`)
 - Dual terminal support (up to 2 instances)
 - Multi-window support (up to 4 projects, agent sees all workspaces)
 
@@ -75,16 +75,18 @@ npm start
 **Prerequisites:**
 - [Node.js](https://nodejs.org/) 18+
 - [OpenSCAD](https://openscad.org/downloads.html) installed and in PATH (or set `OPENSCAD_BINARY` env var)
-- [Claude Code](https://github.com/anthropics/claude-code) installed globally: `npm install -g @anthropic-ai/claude-code`
-  - Or [OpenCode](https://opencode.ai) if you prefer that backend (ClawSCAD auto-detects which is installed; toggle via *ClawSCAD → Agent* in the app menu)
+- At least one supported agent CLI:
+  - [Claude Code](https://github.com/anthropics/claude-code): `npm install -g @anthropic-ai/claude-code`
+  - [Codex](https://developers.openai.com/codex/cli): `npm install -g @openai/codex`
+  - [OpenCode](https://opencode.ai)
 
 ## Usage
 
 1. Launch ClawSCAD — it creates a workspace at `~/clawscad-workspace/`
-2. Claude Code starts in the terminal panel on the right
-3. Tell Claude what to build: *"Make a gear with 20 teeth and a shaft hole"*
-4. Claude writes a .scad file, ClawSCAD auto-renders it in the 3D viewport
-5. If the render fails, ClawSCAD tells Claude to fix it automatically
+2. Choose an installed agent; it starts in the terminal panel on the right
+3. Tell it what to build: *"Make a gear with 20 teeth and a shaft hole"*
+4. The agent writes a .scad file, and ClawSCAD auto-renders it in the 3D viewport
+5. If the render fails, ClawSCAD tells the agent to fix it automatically
 6. Click any checkpoint in the History panel to go back and branch
 7. Use the color swatches to try different colors instantly
 8. Export to STL/3MF when you're happy with the design
@@ -120,7 +122,7 @@ ClawSCAD
 
 - **Rendering**: OpenSCAD CLI (`openscad -o output.3mf input.scad`), tries 3MF first (preserves colors), falls back to STL
 - **3D engine**: three.js with MeshStandardMaterial, RoomEnvironment, EdgesGeometry, raycaster picking
-- **Terminal**: xterm.js + node-pty, spawns `claude` (or `opencode`) directly
+- **Terminal**: xterm.js + node-pty, spawns `claude`, `codex`, or `opencode` directly
 - **Editor**: Monaco with custom Monarch grammar for OpenSCAD
 - **MCP**: Spawns `openscad-mcp-server` as a JSON-RPC subprocess for direct render/validate access
 
@@ -128,4 +130,4 @@ ClawSCAD
 
 MIT — see [LICENSE](LICENSE).
 
-OpenSCAD (GPLv2+) and Claude Code (Apache 2.0) are launched as separate subprocesses. ClawSCAD does not incorporate or link against code from either project.
+OpenSCAD and each selected agent CLI are launched as separate subprocesses. ClawSCAD does not incorporate or link against them.

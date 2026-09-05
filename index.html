@@ -189,16 +189,21 @@
   <!-- Toast notifications -->
   <div id="toast-container"></div>
 
-  <!-- First-run agent picker (Claude Code vs OpenCode) -->
+  <!-- First-run agent picker -->
   <div id="agent-picker" class="hidden">
     <div class="agent-picker-overlay"></div>
     <div class="agent-picker-card">
       <div class="agent-picker-title">Choose your AI agent</div>
-      <div class="agent-picker-sub">ClawSCAD drives the right-hand terminal with either Claude Code or OpenCode. Pick one to get started.<br><br>You can see this menu again by going to <strong>ClawSCAD → Select Harness</strong>.</div>
+      <div class="agent-picker-sub">ClawSCAD drives the right-hand terminal with Claude Code, Codex, or OpenCode. Pick one to get started.<br><br>You can see this menu again by going to <strong>ClawSCAD → Select Harness</strong>.</div>
       <div class="agent-picker-options">
         <button class="agent-option" data-agent="claude">
           <div class="agent-option-title">Claude Code</div>
           <div class="agent-option-desc">Anthropic's official coding agent. Always supports image input so it can visually inspect OpenSCAD renders.</div>
+          <div class="agent-option-avail"></div>
+        </button>
+        <button class="agent-option" data-agent="codex">
+          <div class="agent-option-title">Codex</div>
+          <div class="agent-option-desc">OpenAI's coding agent. ClawSCAD supplies the OpenSCAD MCP server and workspace rules automatically.</div>
           <div class="agent-option-avail"></div>
         </button>
         <button class="agent-option" data-agent="opencode">

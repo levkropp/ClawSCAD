@@ -1540,15 +1540,17 @@ appMenu.addEventListener('click', async (e) => {
   }
 });
 
-// ── Agent Backend (Claude Code vs OpenCode) ─────────────────────────────
+// ── Agent Backend ────────────────────────────────────────────────────────
 // Reflects the main process state: panel label, menu toggle label, model +
 // vision badge. Switching the backend restarts the terminal with the other
-// CLI and rewrites CLAUDE.md (vision-off path strips image-tool guidance).
+// CLI and rewrites the workspace rules (vision-off strips image guidance).
 
 let currentAgentState = { agent: 'claude', model: null, visionSupported: true };
 
 function formatAgentLabel(agent) {
-  return agent === 'opencode' ? 'OpenCode' : 'Claude Code';
+  if (agent === 'codex') return 'Codex';
+  if (agent === 'opencode') return 'OpenCode';
+  return 'Claude Code';
 }
 
 function applyAgentInfo(info) {
@@ -1596,7 +1598,7 @@ const agentPicker = document.getElementById('agent-picker');
 
 async function showAgentPicker() {
   if (!agentPicker) return;
-  let available = { claude: true, opencode: true };
+  let available = { claude: true, codex: true, opencode: true };
   try { available = await window.api.getAvailableAgents(); } catch {}
   agentPicker.querySelectorAll('.agent-option').forEach((btn) => {
     const agent = btn.dataset.agent;
@@ -1624,7 +1626,7 @@ agentPicker?.addEventListener('click', async (e) => {
   applyAgentInfo({
     agent,
     model: agent === 'opencode' ? currentAgentState.model : null,
-    visionSupported: agent === 'claude' ? true : false,
+    visionSupported: agent !== 'opencode',
   });
   showToast(`Starting ${formatAgentLabel(agent)}…`, 'info');
 });

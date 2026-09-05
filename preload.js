@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   restoreCheckpointSession: (id) => ipcRenderer.invoke('checkpoint:restore-session', id),
   onCheckpointUpdate: (cb) => ipcRenderer.on('checkpoint:update', (_, data) => cb(data)),
 
-  // Agent backend (Claude Code vs OpenCode)
+  // Agent backend
   getAgent: () => ipcRenderer.invoke('agent:get'),
   setAgent: (agent) => ipcRenderer.invoke('agent:set', agent),
   getAvailableAgents: () => ipcRenderer.invoke('agent:available'),
@@ -53,7 +53,7 @@ contextBridge.exposeInMainWorld('api', {
   // Workspace
   getWorkspace: () => ipcRenderer.invoke('workspace:get'),
 
-  // MCP direct access (bypasses Claude, calls openscad-mcp-server directly)
+  // MCP direct access (bypasses the agent, calls openscad-mcp-server directly)
   mcpRenderPng: (scadCode, opts) => ipcRenderer.invoke('mcp:render-png', scadCode, opts),
   mcpExportStl: (scadCode, filename) => ipcRenderer.invoke('mcp:export-stl', scadCode, filename),
   mcpStatus: () => ipcRenderer.invoke('mcp:status'),
