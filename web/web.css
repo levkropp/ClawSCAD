@@ -1,0 +1,323 @@
+/* web/web.css — the handful of rules the browser shell needs that the desktop
+   app gets from its own chrome. Deliberately tiny, and it touches NOTHING that
+   style-studio.css owns: no #studio selector, no #view-switch selector. S2's
+   sheet is linked before this one and must keep winning every tie inside the
+   dashboard.
+
+   Everything below uses style.css's :root tokens rather than raw colours, so
+   the shell and the Studio stay one visual system. */
+
+/* The web port has no draggable title bar; body's user-select:none from
+   style.css would still make the Workbench explanation uncopyable. */
+.web-unavailable,
+.web-unavailable * {
+  user-select: text;
+}
+
+.web-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-control);
+  background: var(--surface-0);
+  /* --fg-muted on --surface-0 is the ladder's 4.6:1 step; the badge is small
+     text, so it may not use anything dimmer. */
+  color: var(--fg-muted);
+}
+
+/* The stated-reason panel. One readable column, centred, never a wall. */
+.web-unavailable {
+  margin: auto;
+  max-width: 62ch;
+  padding: clamp(20px, 4vw, 48px);
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
+  line-height: 1.65;
+}
+
+.web-unavailable h2 {
+  margin: 0 0 var(--s3);
+  font-size: var(--text-title);
+  font-weight: 650;
+  color: var(--fg);
+}
+
+.web-unavailable p {
+  margin: 0 0 var(--s3);
+}
+
+.web-unavailable ul {
+  margin: 0 0 var(--s3);
+  padding-left: 1.2em;
+}
+
+.web-unavailable li {
+  margin-bottom: 6px;
+}
+
+.web-unavailable code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--r-inline);
+  background: var(--surface-0);
+  color: var(--fg);
+}
+
+.web-unavailable strong {
+  color: var(--fg);
+  font-weight: 650;
+}
+
+#web-mount-failed[hidden] {
+  display: none;
+}
+
+/* ── The generate panel ───────────────────────────────────────────────────
+   Off-screen rather than display:none, on purpose. studio.js clicks
+   `.gen-candidate[data-key]` cards inside #gen-image-grid, reads
+   #gen-generate-btn's `disabled` attribute through a MutationObserver, and
+   writes #gen-prompt. All of that survives display:none too — but a rendered,
+   hit-testable subtree is the shape those interactions were written against,
+   and this costs one rule. Add `debug-gen` to <body> to look at it. */
+.web-offscreen {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+body.debug-gen #gen-panel.web-offscreen {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  padding: var(--s3);
+  background: var(--surface-1);
+  border-top: 1px solid var(--border-panel);
+}
+
+body.debug-gen .gen-candidate img {
+  max-width: 160px;
+}
+
+/* ── Customize view ───────────────────────────────────────────────────────
+   Owns only #customize and #view-customize. Reuses style.css's token layer
+   and style-studio.css's visual language; restyles no #studio selector.
+   Standing rule 1 applies: a disabled control is COLOURED, never faded. */
+
+body[data-view="customize"] #studio,
+body[data-view="customize"] #main-content { display: none; }
+#customize[hidden] { display: none; }
+
+#customize {
+  flex: 1;
+  overflow-y: auto;
+  padding: clamp(20px, 4vw, 48px);
+  max-width: 1240px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.cz-head { margin-bottom: 20px; }
+.cz-title {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+.cz-sub { margin: 0; color: var(--fg-secondary); font-size: 14px; }
+
+.cz-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.cz-pick-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.cz-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.2fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 860px) { .cz-body { grid-template-columns: 1fr; } }
+
+.cz-group {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: #12122c;
+}
+.cz-group-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7f9fdd;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.cz-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid #1a1a3a;
+}
+.cz-group .cz-field:first-of-type { border-top: none; }
+.cz-label {
+  grid-column: 1;
+  font-size: 13px;
+  color: var(--fg);
+  text-transform: capitalize;
+}
+.cz-readout {
+  grid-column: 2;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #9a9ac4;
+  min-width: 3.5em;
+  text-align: right;
+}
+.cz-hint {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: #7f7fae;
+  line-height: 1.45;
+}
+.cz-input {
+  grid-column: 1 / -1;
+  width: 100%;
+  background: #0a0a18;
+  border: 1px solid var(--border-control, #222244);
+  border-radius: 6px;
+  color: var(--fg);
+  padding: 6px 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.cz-input.cz-check { grid-column: 1 / -1; width: auto; justify-self: start; }
+.cz-input.cz-range { padding: 0; accent-color: #4488ff; }
+.cz-input:focus-visible,
+.cz-select:focus-visible,
+.cz-btn:focus-visible { outline: 2px solid #4488ff; outline-offset: 2px; }
+
+.cz-select {
+  background: #0a0a18;
+  border: 1px solid var(--border-control, #222244);
+  border-radius: 6px;
+  color: var(--fg);
+  padding: 6px 10px;
+  font-size: 13px;
+  min-width: 240px;
+}
+
+.cz-preview {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0d0d22;
+  padding: 12px;
+  position: sticky;
+  top: 12px;
+}
+#cz-preview-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  background: #08081a;
+  min-height: 220px;
+}
+.cz-preview-note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #9a9ac4;
+  min-height: 1.2em;
+}
+
+.cz-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.cz-spacer { flex: 1; }
+.cz-status {
+  font-size: 12.5px;
+  color: #9a9ac4;
+  font-variant-numeric: tabular-nums;
+}
+
+.cz-btn {
+  border: 1px solid var(--border-control, #222244);
+  background: #17172e;
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.cz-btn:hover:not(:disabled) { background: #1f1f3d; border-color: #2e2e5c; }
+/* Coloured, never faded — opacity stays 1 (standing rule 1). */
+.cz-btn:disabled,
+.cz-select:disabled {
+  opacity: 1;
+  background: #17172e;
+  color: #7f7fae;
+  border-color: #7f7fae;
+  cursor: not-allowed;
+}
+.cz-btn.cz-primary {
+  background: linear-gradient(135deg, #3570d8, #5b45c8);
+  border-color: transparent;
+  color: #fff;
+  padding: 9px 20px;
+}
+.cz-btn.cz-primary:hover:not(:disabled) { background: linear-gradient(135deg, #5b45c8, #3570d8); }
+.cz-btn.cz-primary:disabled { background: #17172e; color: #7f7fae; border-color: #7f7fae; }
+
+.cz-empty {
+  border: 1px dashed var(--border-control, #222244);
+  border-radius: 10px;
+  padding: 18px;
+  color: #9a9ac4;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* A build in flight — the Make button is elsewhere, so say it in the chrome. */
+body.is-making #view-customize::after {
+  content: '•';
+  color: #66a0ff;
+  margin-left: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cz-btn { transition: none; }
+}

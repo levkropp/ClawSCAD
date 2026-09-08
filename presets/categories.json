@@ -1,0 +1,228 @@
+{
+  "version": 1,
+  "default": "hardware",
+  "_note": "Overridable by a same-named file in app.getPath(userData)/presets/ (main/categories.js, categories:load). Schema + routing contract: docs/v04-guided-make-contracts.md.",
+  "preamble": "The person describing this is not a CAD user and will not be reading OpenSCAD. Treat their sentence as a brief, not a spec.\n\nMake reasonable assumptions rather than asking questions. State every assumption as a one-line comment at the top of the file, in plain English, so they can correct it by talking to you rather than by editing code. Ask a question only when a wrong guess would waste a print AND no sensible default exists — never for a value you could pick well.\n\nProduce a complete, printable checkpoint in one pass: a single .scad file, every dimension a named variable in one block at the top, one module per feature, colour() on every part, manifold geometry. Do not deliver a partial model and offer to finish it.",
+  "categories": [
+    {
+      "id": "hardware",
+      "label": "Screws & hardware",
+      "glyph": "🔩",
+      "hint": "Bolts, nuts, spacers, standoffs, washers, adapters",
+      "examples": [
+        "An M4 hex standoff 20 mm long",
+        "A 1 mm nylon washer for an M3 screw",
+        "A spacer that lifts a board 6 mm off a panel"
+      ],
+      "presets": ["fits-hardware"],
+      "target": "part",
+      "target_direct": "part",
+      "route": "direct",
+      "confirm": "none",
+      "bias": 30,
+      "ask": [
+        { "id": "thread", "label": "Thread", "kind": "choice", "options": ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "none"] },
+        { "id": "length", "label": "Length", "kind": "number", "unit": "mm", "placeholder": "20" },
+        { "id": "head", "label": "Head", "kind": "choice", "options": ["hex socket", "countersunk", "button", "knurled", "none"] }
+      ],
+      "prompt": "CATEGORY: SCREWS & HARDWARE.\nA small, purely dimensional part. There is nothing to design here — there is a number to get right.\n\nGo straight to geometry. No concept, no variants, no alternatives: one part, correct dimensions, done.\nEvery diameter, pitch and clearance comes from the FITS SCREWS AND PARTS tables below — never from memory and never rounded to a nicer number.\nIf a printed M-thread below M6 is implied, do not model the helix; use a heat-set insert or a clearance bore and say so in one comment line.\nOrient the part so its most accurate feature (the bore, the mating face) is printed flat on the bed, and say which face that is in one comment."
+    },
+    {
+      "id": "bracket",
+      "label": "Brackets & mounts",
+      "glyph": "🔗",
+      "hint": "Wall mounts, clips, hooks, holders, stands, jigs",
+      "examples": [
+        "A clip that snaps onto a 6 mm cable",
+        "A wall mount for a router 180 × 30 mm",
+        "A phone stand at about 60 degrees"
+      ],
+      "presets": ["fits-hardware", "strong"],
+      "target": "part",
+      "target_direct": "part",
+      "route": "direct",
+      "confirm": "none",
+      "bias": 25,
+      "ask": [
+        { "id": "holds", "label": "It holds", "kind": "text", "placeholder": "a 6 mm cable" },
+        { "id": "screws", "label": "Fixing screws", "kind": "choice", "options": ["M3", "M4", "M5", "M6", "adhesive", "none"] },
+        { "id": "load", "label": "Weight on it", "kind": "choice", "options": ["light (under 1 kg)", "medium (1–5 kg)", "heavy (over 5 kg)"] }
+      ],
+      "prompt": "CATEGORY: BRACKETS & MOUNTS.\nA part whose whole job is to hold one specific thing in one specific place.\n\nName the two interfaces before you write geometry, in one comment each: what it grips, and what it fixes to.\nGet the gripped dimension right first — everything else is shaped around it. If the user gave a nominal size, model the clearance, not the nominal.\nA snap or clip feature is a split-tip spring, never a rigid barb: slot width about 0.22 x the feature diameter, at roughly 75% depth.\nPrint orientation is a design decision, not an afterthought: lay the bracket so the load runs in the bed plane and no layer boundary sits at the maximum-moment section. State the orientation in a comment.\nFillet every internal corner. Chamfer the bottom edge 0.6 mm — never fillet it."
+    },
+    {
+      "id": "enclosure",
+      "label": "Boxes & cases",
+      "glyph": "📦",
+      "hint": "Enclosures, lids, trays, organisers, inserts",
+      "examples": [
+        "A box with a snap lid, 80 × 50 × 25 mm inside",
+        "A drawer tray with 6 equal compartments",
+        "A case for a Raspberry Pi with vents"
+      ],
+      "presets": ["fits-hardware"],
+      "target": "part",
+      "target_direct": "part",
+      "route": "auto",
+      "confirm": "images",
+      "bias": 15,
+      "ask": [
+        { "id": "inside", "label": "Inside size", "kind": "text", "unit": "mm", "placeholder": "80 × 50 × 25" },
+        { "id": "lid", "label": "Lid", "kind": "choice", "options": ["snap-fit", "screwed", "sliding", "friction", "no lid"] },
+        { "id": "wall", "label": "Wall", "kind": "number", "unit": "mm", "placeholder": "2" }
+      ],
+      "prompt": "CATEGORY: BOXES & CASES.\nA hollow part defined from the INSIDE out. Every dimension the user gave is an internal dimension unless they said otherwise — build the walls outward from it and say so in a comment.\n\nModel the box and the lid as separate modules in one file, each already laid flat on the bed in its own print orientation, side by side and not overlapping.\nLid fits use the printed-to-printed table: snap +0.10, sliding +0.20, forgiving +0.30 total diametral/edge clearance, from ONE named variable used everywhere.\nA lip or tongue on the lid needs a lead-in chamfer or it will not start. Every internal floor corner gets a fillet; the outer bottom edge gets a 0.6 mm chamfer.\nIf ventilation, cable exits or screw bosses are implied, put them in — an enclosure with no way for the cable to leave is not finished."
+    },
+    {
+      "id": "furniture",
+      "label": "Furniture",
+      "glyph": "🪑",
+      "hint": "Legs, feet, knobs, handles, shelf pins, joints",
+      "examples": [
+        "A 30 mm round drawer knob with an M4 insert",
+        "A tapered mid-century table leg 400 mm tall",
+        "A shelf pin for a 5 mm hole"
+      ],
+      "presets": ["strong", "fits-hardware"],
+      "target": "part",
+      "target_direct": "part",
+      "route": "auto",
+      "confirm": "images",
+      "bias": 0,
+      "ask": [
+        { "id": "size", "label": "Overall size", "kind": "text", "unit": "mm", "placeholder": "30 dia × 25 tall" },
+        { "id": "fixing", "label": "Fixes with", "kind": "choice", "options": ["M4 screw", "M5 screw", "M6 screw", "wood screw", "dowel", "glue only", "none"] }
+      ],
+      "prompt": "CATEGORY: FURNITURE.\nA part that a person will touch every day and that carries real load. Both facts constrain it.\n\nEvery surface a hand meets is rounded — no sharp arris anywhere a finger travels. Fillet r >= 1 mm as a floor, more where the hand wraps.\nWood screws, dowels and cam fittings are not M-hardware: a wood screw needs a pilot bore plus a countersink or counterbore sized for its head, and its pull-out load is carried by the wood, not the print.\nOrient so the load runs in the bed plane. A leg, a bracket foot or a handle printed standing up will split along a layer at the worst possible moment — lay it down and say so in a comment.\nMatch the existing piece where one is implied: if the user names a spacing (32 mm cabinet handle centres, 5 mm shelf pin holes) that number is contractual, not a suggestion.\nIf the part is one of a set, expose a count variable and arrange the copies on the plate."
+    },
+    {
+      "id": "structural",
+      "label": "Structural",
+      "glyph": "🧱",
+      "hint": "Anything that gets pushed, pulled, dropped or clamped",
+      "examples": [
+        "A hook that holds 8 kg off a stud",
+        "A replacement gear lever arm",
+        "A clamp for 25 mm scaffold tube"
+      ],
+      "presets": ["strong"],
+      "target": "part",
+      "target_direct": "part",
+      "route": "direct",
+      "confirm": "none",
+      "bias": 20,
+      "ask": [
+        { "id": "direction", "label": "Load is", "kind": "choice", "options": ["pulling", "pushing", "bending", "clamping", "shock / impact"] },
+        { "id": "kg", "label": "Up to", "kind": "number", "unit": "kg", "placeholder": "8" }
+      ],
+      "prompt": "CATEGORY: STRUCTURAL.\nThis part fails dangerously, not gracefully. Design it as an engineer would and show your reasoning in comments.\n\nBefore any geometry, write three comment lines: the load path from where force enters to where it leaves, the print orientation that keeps that path in the bed plane, and the section that carries the maximum moment.\nSize that section deliberately — state the wall or web thickness and why. Prefer ribs to solid mass; ribs at <= 45 degrees so they self-support, spacing >= 3 x wall.\nNo layer boundary at the maximum-moment section. No support material anywhere on a load path; redesign the overhang instead.\nIf the load, the material or the geometry make the part marginal, SAY SO in a comment in plain English and name what would fix it (thicker section, a metal insert, a different orientation, a different material). Never quietly ship a part that will break."
+    },
+    {
+      "id": "replacement",
+      "label": "Replacement part",
+      "glyph": "🔧",
+      "hint": "Something broke and you need the same thing again",
+      "examples": [
+        "The knob that snapped off my dryer",
+        "A clip for the trim on a 2014 Civic",
+        "The foot from under a washing machine"
+      ],
+      "presets": ["fits-hardware", "strong"],
+      "target": "part",
+      "target_direct": "part",
+      "route": "confirm",
+      "confirm": "photo",
+      "bias": -10,
+      "ask": [
+        { "id": "belongs", "label": "It belongs to", "kind": "text", "placeholder": "a Whirlpool dryer control panel" },
+        { "id": "measured", "label": "Measurements", "kind": "text", "unit": "mm", "placeholder": "shaft 6 mm D, knob 32 dia" }
+      ],
+      "prompt": "CATEGORY: REPLACEMENT PART.\nThe correct part already exists in the physical world and this one has to match it. Nothing here is a design choice.\n\nWork only from what you were actually given — the photo, the measurements, the model number. Where a dimension is missing, do NOT invent it silently: pick the most standard value, and list every such guess in a clearly-headed comment block at the top so the user can measure just those and come back.\nIf a photo is attached, read it before writing geometry and describe in comments what you can and cannot determine from it. A photo shows proportion and shape; it does not show a shaft diameter.\nBuild the mating feature first and the cosmetic shape around it — a knob that looks right and does not fit the shaft is a failed part.\nExpose every fit as a named variable with a comment saying which way to nudge it (\"increase if it is tight\"), because the first print of a replacement part is a test print. Say that in a comment too."
+    },
+    {
+      "id": "model",
+      "label": "Models & figures",
+      "glyph": "🗿",
+      "hint": "Miniatures, characters, animals, busts, statues",
+      "examples": [
+        "A squat dragon curled around an egg",
+        "A 32 mm tabletop knight with a shield",
+        "A bust of an owl, stylised"
+      ],
+      "presets": ["miniature"],
+      "target": "sculpt",
+      "target_direct": "sculpt",
+      "route": "confirm",
+      "confirm": "images",
+      "bias": -30,
+      "ask": [
+        { "id": "height", "label": "Height", "kind": "number", "unit": "mm", "placeholder": "32" },
+        { "id": "style", "label": "Style", "kind": "choice", "options": ["tabletop miniature", "display figure", "bust", "chunky / toy-like"] }
+      ],
+      "prompt": "CATEGORY: MODELS & FIGURES.\nA sculptural object judged by eye, not by calipers. It still has to survive a 0.4 mm nozzle.\n\nStylise up, never down: chunkier, more deliberate forms read well on FDM; delicate detail disappears into the extrusion width.\nEvery free-standing element gets a load path to the base. Anything that would print as a thin trailing edge is either thickened 2-3x or split into its own part on the same plate.\nGive it a stable, flat underside and say in a comment which way up it prints and why."
+    },
+    {
+      "id": "decor",
+      "label": "Home decor",
+      "glyph": "🏺",
+      "hint": "Vases, planters, coasters, ornaments, wall pieces",
+      "examples": [
+        "A 90 mm round coaster, 4 mm thick",
+        "An owl planter with big round eyes",
+        "A twisted hex vase about 150 mm tall"
+      ],
+      "presets": ["decor-organic"],
+      "target": "sculpt",
+      "target_direct": "part",
+      "route": "auto",
+      "confirm": "images",
+      "bias": -10,
+      "ask": [
+        { "id": "height", "label": "Height", "kind": "number", "unit": "mm", "placeholder": "150" },
+        { "id": "style", "label": "Look", "kind": "choice", "options": ["smooth & modern", "organic & flowing", "geometric", "textured"] }
+      ],
+      "prompt": "CATEGORY: HOME DECOR.\nLooks are the specification. Nothing has to fit anything, so spend the effort on form.\n\nIf the piece holds water or soil, say in a comment whether it is watertight as printed — a vase at 3 perimeters is not, and the honest answer is a liner or a sealed insert, not silence.\nGive it a flat base wide enough not to tip, and a bottom chamfer so it sits without an elephant's foot.\nPrefer one continuous form over an assembly. Where a curve is the point, use enough resolution to earn it and say what it cost in render time."
+    },
+    {
+      "id": "toy",
+      "label": "Toys & games",
+      "glyph": "🧩",
+      "hint": "Dice, tokens, puzzle pieces, fidgets, game bits",
+      "examples": [
+        "A 16 mm six-sided die with pips",
+        "A fidget with a print-in-place hinge",
+        "Storage trays for a board game box"
+      ],
+      "presets": ["decor-organic"],
+      "target": "sculpt",
+      "target_direct": "part",
+      "route": "auto",
+      "confirm": "images",
+      "bias": 0,
+      "ask": [
+        { "id": "size", "label": "Size", "kind": "number", "unit": "mm", "placeholder": "16" },
+        { "id": "age", "label": "For", "kind": "choice", "options": ["toddler — no small parts", "kids", "adults"] }
+      ],
+      "prompt": "CATEGORY: TOYS & GAMES.\nIt will be handled hard, dropped, and possibly chewed. Design for abuse.\n\nNo sharp edges anywhere: round or chamfer every outer edge as a rule, not as a finish.\nIf the user said it is for a toddler, nothing may be small enough to swallow and nothing may snap off — no thin protrusions, no separate parts under 32 mm in any direction. Say in a comment that you applied this.\nPrint-in-place mechanisms use one named clearance variable for BOTH the radial and axial gaps, at 0.20; keep any pin bridge span under 18 mm.\nA set of identical pieces gets a count variable and an arranged plate, not one piece and instructions to re-run."
+    },
+    {
+      "id": "other",
+      "label": "Something else",
+      "glyph": "✨",
+      "hint": "Not sure which — describe it and I'll work it out",
+      "examples": [
+        "Describe it however makes sense to you"
+      ],
+      "presets": [],
+      "target": "sculpt",
+      "target_direct": "part",
+      "route": "auto",
+      "confirm": "both",
+      "bias": 0,
+      "ask": [
+        { "id": "size", "label": "Overall size", "kind": "text", "unit": "mm", "placeholder": "about 100 mm tall" }
+      ],
+      "prompt": "CATEGORY: UNCLASSIFIED.\nThe user did not know which bucket this falls in, so classify it yourself in the first comment line — is this a dimensional part, a load-bearing part, or a sculptural one? — and then apply that discipline for the rest of the file.\n\nIf it turns out to be two things (a decorative shell with a functional mount), build the functional half parametrically and say which half is which."
+    }
+  ]
+}

@@ -1,15 +1,23 @@
 name: Build Windows (exe)
 
+# Verification only. This workflow does NOT publish releases.
+#
+# It used to trigger on tags: ['v*', '20*'] and upload release/*.exe to the
+# GitHub release. That collided with `npm run release`, which creates the tag
+# as its first act: CI would then rebuild and overwrite the .exe with a
+# different binary whose sha512 no longer matched the published latest.yml,
+# permanently breaking that update for every client — silently, and after the
+# release script had already printed green. `scripts/release.ps1` owns the
+# feed; exactly one publisher may. See docs/releasing.md.
 on:
   push:
     branches: [main]
-    tags: ['v*', '20*']
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -28,14 +36,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          D="${GITHUB_REF_NAME#v}"
-          SEMVER="${D:0:4}.$((10#${D:4:2})).$((10#${D:6:2}))"
-          npm version --no-git-tag-version "$SEMVER"
 
       - name: Cache OpenSCAD vendor binary
         uses: actions/cache@v4
@@ -60,9 +60,3 @@ jobs:
           name: ClawSCAD-Windows-Setup
           path: release/*.exe
           if-no-files-found: warn
-
-      - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*.exe

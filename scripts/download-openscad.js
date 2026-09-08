@@ -64,6 +64,13 @@ const ASSETS = {
     tmp: path.join(VENDOR_DIR, '_openscad-win.zip'),
     ready: path.join(VENDOR_DIR, 'openscad-win'),
     finalize(tmp, ready) {
+      // --force re-extracts over whatever is already here. Expand-Archive would
+      // merge the two layouts, leaving a directory that flatten() can no longer
+      // recognise, so start clean. (Guarded: this only ever deletes the
+      // vendors/openscad-win directory this script created.)
+      if (path.basename(ready) === 'openscad-win' && fs.existsSync(ready)) {
+        fs.rmSync(ready, { recursive: true, force: true });
+      }
       // Use PowerShell on Windows; fall back to unzip on CI runners
       try {
         execFileSync('powershell', [
@@ -74,6 +81,13 @@ const ASSETS = {
         execFileSync('unzip', ['-q', tmp, '-d', ready]);
       }
       fs.rmSync(tmp, { force: true });
+      // The zip carries a top-level OpenSCAD-<snapshot>-x86-64/ folder, so a
+      // plain extract puts the binary one level below where the app looks for
+      // it (main.js openscadBundledPath → vendors/openscad-win/openscad.exe).
+      // That is not just a dev-checkout problem: electron-builder copies this
+      // tree into the installer verbatim, so the shipped app carries a 65 MB
+      // OpenSCAD it can never resolve and tells the user to install one.
+      flattenSingleDir(ready, 'openscad.exe');
       console.log(`  → ${ready}`);
     },
   },
@@ -81,6 +95,31 @@ const ASSETS = {
 
 // Intel Mac reuses the arm64 finalize
 ASSETS['darwin-x64'].finalize = ASSETS['darwin-arm64'].finalize;
+
+// ── Archive shape ─────────────────────────────────────────────────────────────
+
+/**
+ * If `dir` contains nothing but a single subdirectory, and `marker` lives in
+ * that subdirectory rather than in `dir` itself, move its contents up one level
+ * and remove it. Archives that already extract flat are left untouched, so this
+ * is safe to call unconditionally and safe to call twice.
+ *
+ * @returns {boolean} whether anything moved
+ */
+function flattenSingleDir(dir, marker) {
+  if (fs.existsSync(path.join(dir, marker))) return false;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  if (entries.length !== 1 || !entries[0].isDirectory()) return false;
+  const inner = path.join(dir, entries[0].name);
+  // Only flatten a directory that actually holds what we came for — an archive
+  // with some other single-folder shape is left alone rather than shuffled.
+  if (!fs.existsSync(path.join(inner, marker))) return false;
+  for (const name of fs.readdirSync(inner)) {
+    fs.renameSync(path.join(inner, name), path.join(dir, name));
+  }
+  fs.rmdirSync(inner);
+  return true;
+}
 
 // ── Download helper ───────────────────────────────────────────────────────────
 
@@ -149,7 +188,12 @@ async function main() {
   console.log(`Done. OpenSCAD ${SNAPSHOT} is ready.`);
 }
 
-main().catch((e) => {
-  console.error('\nDownload failed:', e.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('\nDownload failed:', e.message);
+    process.exit(1);
+  });
+}
+
+// Exported so the archive-shape rule can be exercised without a 65 MB download.
+module.exports = { flattenSingleDir };

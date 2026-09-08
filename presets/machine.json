@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "active": "p1s-0.4-pla",
+  "machines": {
+    "p1s-0.4-pla": {
+      "label": "Bambu P1S · 0.4 mm · PLA",
+      "nozzle_mm": 0.4,
+      "extrusion_width_mm": 0.42,
+      "bed": {
+        "x": 256,
+        "y": 256,
+        "z": 250,
+        "centre": [
+          128,
+          128
+        ],
+        "exclude_area": {
+          "x": 18,
+          "y": 28,
+          "corner": "front-left"
+        }
+      },
+      "material": "PLA",
+      "max_bridge_mm": 60,
+      "hole_comp_mm": 0.2,
+      "tol_mm": 0.2,
+      "slicer_profiles": {
+        "fine": "flat-presets-p1s/process-p1s-figurine-fine.json",
+        "decor": "flat-presets-p1s/pla-decor.json",
+        "functional": "flat-presets-p1s/pla-functional.json",
+        "strong": "flat-presets-p1s/petg-strong.json",
+        "mechanical": "flat-presets-p1s/petg-mechanical.json",
+        "draft": "flat-presets-p1s/pla-draft.json"
+      }
+    },
+    "a1-0.4-pla": {
+      "label": "Bambu A1 · 0.4 mm · PLA",
+      "nozzle_mm": 0.4,
+      "bed": {
+        "x": 256,
+        "y": 256,
+        "z": 250,
+        "centre": [
+          128,
+          128
+        ],
+        "exclude_area": null
+      },
+      "material": "PLA",
+      "max_bridge_mm": 60,
+      "hole_comp_mm": 0.2,
+      "tol_mm": 0.2
+    },
+    "p1s-0.4-petg": {
+      "label": "Bambu P1S · 0.4 mm · PETG",
+      "nozzle_mm": 0.4,
+      "material": "PETG",
+      "max_bridge_mm": 40,
+      "hole_comp_mm": 0.2,
+      "tol_mm": 0.25,
+      "insert_bore_delta_mm": 0.02
+    }
+  },
+  "derived": {
+    "min_wall_abs_mm": "2 * nozzle_mm",
+    "min_wall_struct_mm": "5 * nozzle_mm",
+    "min_feature_mm": "2.5 * nozzle_mm",
+    "facet_fine_mm": "0.5 * extrusion_width_mm",
+    "bottom_chamfer_mm": "1.5 * nozzle_mm"
+  },
+  "_note": "Overridable by a same-named file in app.getPath(userData)/presets/ (main/presets.js presets:load)."
+}

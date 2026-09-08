@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>ClawSCAD Studio</title>
+  <!-- The app's REAL stylesheets, served by web/server.js from the repo root.
+       style.css carries the :root token layer style-studio.css is built on, so
+       the order here matches index.html's: tokens first, studio last. There is
+       no copy of either file in web/ — a fork would drift from S2 within a
+       release and the dashboard would go quietly off-brand. -->
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style-studio.css">
+  <link rel="stylesheet" href="/web.css">
+</head>
+<body data-view="studio">
+  <div id="app">
+    <div id="app-header">
+      <span class="brand-btn">ClawSCAD</span>
+      <span class="separator"></span>
+      <!-- Both tabs, exactly as the desktop shell: studio.js binds click
+           handlers to #view-studio / #view-workbench and toggles
+           body[data-view]. The Workbench tab does not lead nowhere — it leads
+           to the stated-reason panel below, which is what the §S1 degradation
+           table asks for. -->
+      <div id="view-switch" role="tablist" aria-label="View">
+        <button id="view-studio" role="tab" aria-selected="true" aria-controls="studio">Make</button>
+        <button id="view-customize" role="tab" aria-selected="false" aria-controls="customize">Customize</button>
+        <button id="view-workbench" role="tab" aria-selected="false" aria-controls="main-content">Workbench</button>
+      </div>
+      <span class="separator"></span>
+      <span class="web-badge" title="This is the browser port of ClawSCAD Studio">web</span>
+    </div>
+
+    <!-- S1 builds the entire dashboard inside this element. Empty and hidden
+         until mountStudio(ctx) runs, so a failed mount shows the panel below
+         rather than a blank page. -->
+    <div id="studio" hidden></div>
+
+    <!-- The Customize view: pick a model, turn its OpenSCAD customizer knobs,
+         see a server-side render, download a printable 3MF. web/customize.js
+         builds all of it; empty and hidden until then. -->
+    <div id="customize" hidden></div>
+
+    <!-- The Workbench, honestly. Nothing is stubbed here and nothing pretends:
+         the viewport is three.js, the terminal is node-pty, the render is a
+         local OpenSCAD process, and none of the three can exist in a browser
+         tab. Naming each one is more useful than an empty panel. -->
+    <div id="main-content" hidden>
+      <div class="web-unavailable">
+        <h2>The Workbench isn't part of the web port.</h2>
+        <p>
+          This is the <strong>Make</strong> view, self-hosted. Four things live in the desktop app and
+          have no browser equivalent, so rather than stub them they are simply absent:
+        </p>
+        <ul>
+          <li><strong>The 3D viewport</strong> — three.js rendering a mesh loaded from local disk.</li>
+          <li><strong>The terminal</strong> — a live Claude Code session over <code>node-pty</code>. This is
+            why <em>Make it</em> cannot hand a brief to Claude from here.</li>
+          <li><strong>OpenSCAD rendering</strong> — a local <code>openscad</code> process per change.</li>
+          <li><strong>The checkpoint tree</strong> — opening, branching and exporting checkpoints.</li>
+        </ul>
+        <p>
+          Everything that <em>does</em> work here works for real: the tool catalog, the routing decision,
+          reference-picture rounds, and recreating an uploaded picture — all driven by the same
+          <code>claw-gen</code> CLI on the host machine. Open the workspace in ClawSCAD on the desktop for
+          the rest.
+        </p>
+        <button id="web-back-to-make" class="small-btn" type="button">Back to Make</button>
+      </div>
+    </div>
+
+    <!-- Shown only if mountStudio never published ctx.studio. -->
+    <div id="web-mount-failed" class="web-unavailable" hidden>
+      <h2>The Studio didn't start.</h2>
+      <p>The dashboard failed to mount. Open the browser console for the reason, and check that
+         <code>web/dist/app.js</code> was built from the current sources.</p>
+    </div>
+
+    <!-- ── The generate panel ────────────────────────────────────────────
+         Visually hidden, NOT inert. renderer/studio.js's flow B drives these
+         four elements directly — it writes #gen-prompt, clicks
+         #gen-generate-btn, clicks a `.gen-candidate[data-key]` inside
+         #gen-image-grid, then clicks #gen-make3d-btn — and it reads
+         `#gen-generate-btn.disabled` as its only end-of-run signal. Omitting
+         any one of them makes the picture step fall back to Direct with a
+         toast; making them inert would make it hang instead. web/entry.js
+         owns their behaviour, exactly as renderer.js does in the desktop app.
+         `body.debug-gen` reveals the panel when diagnosing a run. -->
+    <div id="gen-panel" class="web-offscreen" aria-hidden="true">
+      <textarea id="gen-prompt" rows="2" aria-label="Generation prompt"></textarea>
+      <input id="gen-count" type="number" min="1" max="8" value="4" aria-label="How many pictures">
+      <button id="gen-generate-btn" type="button">Generate images</button>
+      <button id="gen-make3d-btn" type="button" disabled>Make 3D</button>
+      <div id="gen-image-grid" class="gen-image-grid"></div>
+    </div>
+
+    <!-- upload:pick has no browser equivalent; this is what the shim drives. -->
+    <input id="web-file-input" class="web-offscreen" type="file"
+           accept=".png,.jpg,.jpeg,.webp,.svg,.dxf" aria-hidden="true" tabindex="-1">
+  </div>
+
+  <div id="toast-container" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/dist/app.js"></script>
+</body>
+</html>

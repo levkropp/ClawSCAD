@@ -1,0 +1,400 @@
+/* style-gallery.css — owned exclusively by P4 (gallery). No existing token
+   changes value (per arch-map §4.1 / ux-spec §8.1); every colour below is
+   either an existing :root value from style.css or a same-family alias of
+   one, matching the ratios already audited in the v2 UX spec §8.6. */
+
+:root {
+  /* One step above --surface-3 so the sheet reads as "you have stopped
+     making and started looking" (ux-spec §4.1), never a docked panel. */
+  --gallery-scrim: rgba(8, 8, 24, 0.78);
+  --gallery-card: var(--surface-3);
+  --gallery-card-hover: var(--surface-raised);
+  --gallery-thumb-bg: var(--surface-viewport);
+  --gallery-card-w: 176px;
+  --gallery-thumb-h: 100px;
+  /* Above the context menu (300) and popovers (100), below toasts (1000) —
+     a gallery card action can still raise a toast on top of the sheet. */
+  --gallery-z: 500;
+}
+
+#gallery-sheet[hidden] {
+  display: none;
+}
+
+#gallery-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: var(--gallery-z);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--gallery-scrim);
+  opacity: 0;
+  transition: opacity var(--t-slow) var(--ease);
+}
+
+#gallery-sheet.gallery-open .gallery-scrim {
+  opacity: 1;
+}
+
+.gallery-modal {
+  position: relative;
+  width: min(1200px, 96vw);
+  height: min(820px, 92vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-modal);
+  box-shadow: var(--e-overlay);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease);
+}
+
+#gallery-sheet.gallery-open .gallery-modal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-scrim,
+  .gallery-modal {
+    transition-duration: 0.01ms;
+  }
+}
+
+.gallery-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0 var(--s3);
+  background: var(--grad-panel);
+  border-bottom: 1px solid var(--border-panel);
+}
+
+.gallery-header .label {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--track-chrome);
+  color: var(--accent-label);
+}
+
+#gallery-scope {
+  background: var(--surface-2);
+  color: var(--fg-secondary);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  font-size: var(--text-body);
+  padding: 3px var(--s2);
+  font-family: inherit;
+}
+
+#gallery-filter {
+  display: flex;
+  gap: 2px;
+}
+
+#gallery-filter button {
+  padding: 3px var(--s2);
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+
+#gallery-filter button:hover {
+  color: var(--fg);
+  border-color: var(--border-hover);
+}
+
+#gallery-filter button[aria-pressed='true'] {
+  background: #4488ff1a;
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+#gallery-filter button:focus-visible,
+#gallery-search:focus-visible,
+#gallery-scope:focus-visible,
+#gallery-close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#gallery-search {
+  flex: 1;
+  min-width: 120px;
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  font-size: var(--text-body);
+  padding: 5px var(--s2);
+  font-family: inherit;
+}
+
+#gallery-search::placeholder {
+  color: var(--fg-faint);
+}
+
+#gallery-close-btn {
+  width: 26px;
+  height: 26px;
+  min-width: 24px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+#gallery-close-btn:hover {
+  color: var(--fg);
+  background: var(--hover-wash);
+}
+
+.gallery-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s3);
+}
+
+.gallery-workspace-errors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin-bottom: var(--s3);
+}
+
+.gallery-workspace-error {
+  font-size: var(--text-meta);
+  color: var(--warn);
+  background: #2a1a0a;
+  border: 1px solid #f0a63c40;
+  border-radius: var(--r-control);
+  padding: var(--s1) var(--s2);
+}
+
+.gallery-day-heading {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--track-chrome);
+  color: var(--accent-label);
+  margin: var(--s3) 0 var(--s2);
+}
+
+.gallery-day-heading:first-child {
+  margin-top: 0;
+}
+
+#gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-card-w), 1fr));
+  gap: var(--s3);
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  background: var(--gallery-card);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.gallery-card:hover {
+  background: var(--gallery-card-hover);
+  border-color: var(--border-hover);
+}
+
+.gallery-card:focus-visible,
+.gallery-card.selected {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.gallery-thumb {
+  height: var(--gallery-thumb-h);
+  background: var(--gallery-thumb-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--fg-faint);
+}
+
+.gallery-thumb-mosaic {
+  height: var(--gallery-thumb-h);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  background: var(--gallery-thumb-bg);
+}
+
+.gallery-thumb-mosaic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-card-glyph {
+  font-family: var(--font-mono);
+}
+
+.gallery-card-glyph.gen {
+  color: var(--cp-generated);
+}
+
+.gallery-card-glyph.image {
+  color: var(--geometry);
+}
+
+.gallery-card-body {
+  padding: var(--s2) var(--s2) 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gallery-card-label {
+  font-size: var(--text-body);
+  color: var(--fg-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--text-meta);
+  font-family: var(--font-mono);
+  color: var(--fg-faint);
+}
+
+.gallery-card-badges {
+  display: flex;
+  gap: var(--s1);
+  padding: 0 var(--s2);
+}
+
+/* .cp-badge / .cp-badge-found are REUSED verbatim from style.css — this
+   file adds no second badge vocabulary. */
+
+.gallery-empty {
+  padding: var(--s5) var(--s3);
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+.gallery-empty strong {
+  display: block;
+  color: var(--fg);
+  margin-bottom: var(--s2);
+}
+
+.gallery-empty a {
+  color: var(--accent);
+}
+
+#gallery-detail {
+  flex-shrink: 0;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
+}
+
+#gallery-detail-text {
+  flex: 1;
+  font-size: var(--text-body);
+  color: var(--fg);
+  line-height: 1.4;
+}
+
+#gallery-detail-text .gallery-detail-empty {
+  color: var(--fg-muted);
+}
+
+#gallery-detail-actions {
+  display: flex;
+  gap: var(--s2);
+  flex-shrink: 0;
+}
+
+#gallery-detail-actions .small-btn:disabled {
+  opacity: 1;
+  color: var(--fg-disabled);
+}
+
+/* Applied briefly to a .cp-node (style.css) by "Show in tree" / "Continue
+   from here" so the gallery's chosen row is findable at a glance once the
+   sheet closes. .cp-node.active already carries the permanent accent bar;
+   this is only the momentary "here it is" pulse on top of that. */
+.cp-node.gallery-flash {
+  animation: gallery-flash-pulse 1.2s var(--ease);
+}
+
+@keyframes gallery-flash-pulse {
+  0% {
+    background: var(--active-wash);
+  }
+  30% {
+    background: #4488ff33;
+  }
+  100% {
+    background: var(--active-wash);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-node.gallery-flash {
+    animation-duration: 0.01ms;
+  }
+}
+
+@media (max-width: 900px) {
+  .gallery-modal {
+    width: 98vw;
+    height: 94vh;
+  }
+}

@@ -1,0 +1,1732 @@
+/* style-studio.css — v0.6 "Studio". Owned exclusively by S2.
+   Contract: docs/v06-studio-contracts.md §S2 + the shared DOM inventory.
+
+   Linked LAST in index.html, so equal-specificity rules here win. That is a
+   loaded gun: this sheet touches ONLY #studio, #view-switch and the
+   body[data-view] view switch. It restyles no workbench selector — four
+   existing specs assert computed styles there and this sheet would silently
+   win the cascade against every one of them.
+
+   Everything below is built from style.css's :root token layer. The handful of
+   values that had no existing token are declared once, scoped to
+   `#studio, #view-switch` (never :root), and are marked NEW.
+
+   ── Contrast, computed against the actual background each colour sits on ──
+   (WCAG relative luminance; the ladder in style.css quotes against --surface-1
+   at L=.0535, and the studio's surfaces land within 3% of it, so the quoted
+   figures carry.)
+
+     --fg           #c8c8dc on the console  #12122c→#0d0d22   11.1 : 1   prompt, titles
+     --fg           #c8c8dc on --studio-tile-on #16203c        9.8 : 1   selected tile label
+     --fg-secondary #9a9ac4 on --surface-1  #0a0a18            7.3 : 1   tile labels, chip text
+     --fg-secondary #9a9ac4 over the ambient glow, worst case  5.9 : 1   hero sub-line
+     --fg-muted     #7f7fae on the console  #12122c            4.8 : 1   placeholder, hint
+     --fg-muted     #7f7fae on --surface-1  #0a0a18            5.2 : 1   tool-field labels
+     --fg-secondary #9a9ac4 on --studio-tile-on #16203c        6.0 : 1   selected tile hint
+     --accent-label #7f9fdd on the chip wash #181834           6.6 : 1   chip labels
+     --accent-hover #66a0ff on --surface-1                     7.5 : 1   route override, steps
+     --geometry     #44cc77 on --surface-1                     9.5 : 1   picked candidate
+     #ffffff        on --studio-go-a #3570d8                   4.7 : 1   submit label (worst
+     #ffffff        on --studio-go-b #5b45c8                   6.7 : 1   point of the gradient)
+     --fg-muted     #7f7fae on --studio-off  #17172e           4.6 : 1   DISABLED submit label
+     --fg-muted     #7f7fae as the disabled submit's border    4.8 : 1   DISABLED edge
+
+   Note the last two. A disabled control here is COLOURED, never faded —
+   opacity stays 1 (standing rule 1, asserted in four specs) — and it is also
+   still *legible*, because the disabled submit is where the app explains why
+   it cannot run yet. The v0.2 audit's lesson was that `opacity:.4` on an
+   already-3.5:1 label lands at ~1.6:1; swapping that for --fg-disabled
+   (#4a4a70, 2.3:1) would have re-created the same failure by another route,
+   so the disabled palette is built from --fg-muted instead.
+
+   --fg-faint (#6a6a98, 3.6:1) is used for NO text in this sheet, only for
+   hairlines. The hero prompt's placeholder is --fg-muted for the same reason.
+
+   Every interactive element has a :focus-visible rule. Every transition is
+   named (never `transition: all`) and every animation is switched off under
+   prefers-reduced-motion. */
+
+/* ── Scoped tokens ────────────────────────────────────────────────────────
+   #view-switch lives in the header, outside #studio, so the block is shared
+   by both roots rather than living on #studio alone. */
+
+#studio,
+#view-switch {
+  /* NEW — the studio's content column. One value, so the hero, the tiles, the
+     console and the stage all share an optical centre line. */
+  --studio-max: 1240px;
+  --studio-gutter: clamp(var(--s4), 4vw, 56px);
+
+  /* NEW — surfaces. The console is the one lifted plane in the view; the
+     gradient is what makes it read as the centre of gravity rather than
+     "another panel". --studio-tile-on is the same wash the checkpoint tree
+     and the guided grid already use for "selected". */
+  --studio-console-top: #12122c;
+  --studio-console-bottom: #0d0d22;
+  --studio-tile-on: #16203c;
+  --studio-chip: #181834;         /* --accent at 8% over the console */
+  --studio-chip-file: #1b1734;    /* --cp-generated at 8% over the console */
+
+  /* NEW — the primary action. Both stops clear 4.5:1 against #fff, so the
+     hover slide across the gradient can never take the label below AA. */
+  --studio-go-a: #3570d8;
+  --studio-go-b: #5b45c8;
+
+  /* NEW — the disabled plane: a different colour, not a faded one. */
+  --studio-off: #17172e;
+  --studio-off-fg: var(--fg-muted);
+
+  /* NEW — type. The workbench is 10–13px instrument chrome; the studio is a
+     full-window front door and needs one step up, not the whole way to a
+     marketing page. */
+  --studio-text-sm: 12px;
+  --studio-text: 14px;
+  --studio-text-lg: 16px;
+  --studio-prompt-size: 17px;
+}
+
+/* ── The view switch ──────────────────────────────────────────────────────
+   A real segmented control, not two loose buttons. renderer.js sets
+   `hidden` on it when the studio fails to mount — and #view-switch's own
+   `display:flex` would out-rank the UA [hidden] rule, so that guard only
+   works because of the rule immediately below it. */
+
+#view-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-0);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  -webkit-app-region: no-drag;
+}
+
+#view-switch[hidden] {
+  display: none;
+}
+
+#view-switch button {
+  padding: 3px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
+}
+
+#view-switch button:hover {
+  color: var(--fg);
+  background: var(--hover-wash);
+}
+
+/* Selected — background AND border AND colour, on top of the aria-selected
+   that actually carries the state for a screen reader. */
+#view-switch button[aria-selected="true"] {
+  background: linear-gradient(180deg, #1b2a52, var(--studio-tile-on));
+  border-color: var(--accent-dim);
+  color: var(--fg);
+}
+
+#view-switch button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── The view switch itself ───────────────────────────────────────────────
+   #main-content carries `display:flex` from style.css, which out-ranks the UA
+   [hidden] rule, so hiding the workbench needs an explicit rule. Both hooks
+   are honoured: body[data-view] (the contract's switch) and a plain `hidden`
+   attribute, so S1 may drive either without this sheet having an opinion. */
+
+body[data-view="studio"] #main-content,
+#main-content[hidden] {
+  display: none;
+}
+
+body[data-view="workbench"] #studio,
+#studio[hidden] {
+  display: none;
+}
+
+/* Any [hidden] child inside the studio — #studio-tools-menu, #studio-stage,
+   #studio-recent, chips, the route override. One rule so no element that this
+   sheet gives a `display` to can ever ignore its own hidden attribute. */
+#studio [hidden] {
+  display: none;
+}
+
+/* Standing rule 1, applied to everything in the view up front — including any
+   control S1 adds that this sheet does not name. Colour is per-component
+   below; opacity is never negotiable. */
+#studio :disabled,
+#view-switch :disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+/* body sets user-select:none, which silently kills text selection inside
+   inputs in Chromium. style.css opts #composer-prompt back in; every studio
+   field needs the same. */
+#studio-prompt,
+#studio-refine-input,
+.studio-field-input,
+.studio-chip-text,
+#studio-route-text {
+  user-select: text;
+}
+
+/* ── The view root ────────────────────────────────────────────────────────
+   #studio never scrolls; #studio-scroll is the only scroll container in the
+   view (contract §S2). color-scheme pins native selects, checkboxes and the
+   scrollbar to dark so the studio's own inputs match the app. */
+
+#studio {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface-2);
+  color-scheme: dark;
+  font-family: var(--font-ui);
+}
+
+/* ── Ambient glow ─────────────────────────────────────────────────────────
+   Two large radials in the brand blue and violet, plus one whisper of the
+   Dracula green at the floor. Alphas are held low deliberately: the only text
+   that sits directly on this layer is the hero, and --fg-secondary over the
+   brightest point of the blue still measures 5.9:1. Every other text surface
+   in the view is opaque, so nothing else is affected by it at all. */
+
+.studio-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 22% -6%, rgba(68, 136, 255, 0.14), transparent 70%),
+    radial-gradient(760px 480px at 82% 4%, rgba(176, 124, 255, 0.12), transparent 72%),
+    radial-gradient(1200px 700px at 50% 112%, rgba(80, 250, 123, 0.05), transparent 70%);
+  animation: studio-glow-drift 34s var(--ease) infinite alternate;
+  will-change: transform;
+}
+
+@keyframes studio-glow-drift {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+  to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.06); }
+}
+
+/* ── The scroll column ────────────────────────────────────────────────────
+   Every direct child is a full-width band capped to the same content column,
+   so S1 can append a section without this sheet knowing about it and it still
+   lines up with the console. */
+
+#studio-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  padding: clamp(var(--s5), 6vh, 72px) var(--studio-gutter) var(--s6);
+}
+
+#studio-scroll > * {
+  width: 100%;
+  max-width: var(--studio-max);
+  margin-inline: auto;
+}
+
+#studio-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+#studio-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#studio-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-panel);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 6px;
+}
+
+#studio-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--border-control);
+  background-clip: content-box;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+
+#studio-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* Fluid, but bounded at both ends — the window is resizable and this line has
+   to hold at 900px and at 2560px without becoming a billboard. */
+#studio-title {
+  font-family: var(--font-ui);
+  font-size: clamp(26px, 2.2vw, 34px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+
+#studio-sub {
+  font-size: var(--studio-text-lg);
+  line-height: 1.45;
+  color: var(--fg-secondary);
+  max-width: 62ch;
+}
+
+/* ── Print-type tiles ─────────────────────────────────────────────────────
+   auto-fit, never a fixed 3-across: four columns at 900px, six or more at
+   2560px, and it collapses to two on a very narrow window without a media
+   query. */
+
+#studio-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: var(--s3);
+}
+
+#studio-types:empty {
+  display: none;
+}
+
+.studio-type {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 104px;
+  padding: var(--s3);
+  text-align: left;
+  background: var(--surface-1);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              box-shadow var(--t-base) var(--ease),
+              transform var(--t-base) var(--ease);
+}
+
+.studio-type-glyph {
+  font-size: 24px;
+  line-height: 1;
+  /* Unselected glyphs read one step back through saturation, never opacity —
+     the faded-control rule is absolute and saturation is not opacity. */
+  filter: saturate(0.6);
+  transition: filter var(--t-fast) var(--ease);
+}
+
+.studio-type-label {
+  font-size: var(--studio-text);
+  font-weight: 600;
+  line-height: 1.2;
+  color: inherit;
+  text-wrap: balance;
+}
+
+.studio-type-hint {
+  font-size: var(--studio-text-sm);
+  line-height: 1.35;
+  color: var(--fg-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.studio-type:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+  transform: translateY(-1px);
+}
+
+.studio-type:hover .studio-type-glyph,
+.studio-type[aria-checked="true"] .studio-type-glyph {
+  filter: saturate(1.1);
+}
+
+.studio-type:hover .studio-type-hint {
+  color: var(--fg-secondary);
+}
+
+.studio-type:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selected — wash + border + colour + a left bar. Four cues, one of which is
+   a shape, so the state does not rest on colour alone. */
+.studio-type[aria-checked="true"] {
+  background: var(--studio-tile-on);
+  border-color: var(--accent);
+  color: var(--fg);
+  box-shadow: inset 3px 0 0 0 var(--accent), 0 0 0 1px var(--accent-dim);
+}
+
+/* --fg-muted would fall to 4.25:1 on the selected wash — one step up. */
+.studio-type[aria-checked="true"] .studio-type-hint {
+  color: var(--fg-secondary);
+}
+
+.studio-type[aria-checked="true"]:hover {
+  background: #1a2748;
+}
+
+/* ── The console — the centre of gravity ──────────────────────────────── */
+
+#studio-console {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4) var(--s4) var(--s3);
+  background: linear-gradient(180deg, var(--studio-console-top), var(--studio-console-bottom));
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-modal);
+  box-shadow: var(--e-floating), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color var(--t-base) var(--ease),
+              box-shadow var(--t-base) var(--ease);
+}
+
+/* The focus ring reads at a glance: the whole card lights, not a 2px hairline
+   somewhere inside it. Fires for pointer focus too, which is the point. */
+#studio-console:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--e-floating),
+              inset 0 1px 0 rgba(255, 255, 255, 0.06),
+              0 0 0 1px var(--accent),
+              0 0 32px rgba(68, 136, 255, 0.18);
+}
+
+/* ── Chips ────────────────────────────────────────────────────────────── */
+
+#studio-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+#studio-chips:empty {
+  display: none;
+}
+
+.studio-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s2);
+  max-width: 100%;
+  padding: 5px var(--s2) 5px 10px;
+  background: var(--studio-chip);
+  border: 1px solid #4488ff40;
+  border-radius: var(--r-control);
+  font-size: var(--studio-text-sm);
+  line-height: 1.3;
+}
+
+/* Attachments read as the other family — the same blue/violet split the
+   checkpoint tree already uses for parametric vs mesh-derived. */
+.studio-chip[data-attachment] {
+  background: var(--studio-chip-file);
+  border-color: #b07cff40;
+}
+
+.studio-chip-label {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+}
+
+.studio-chip[data-attachment] .studio-chip-label {
+  color: var(--cp-generated);
+}
+
+.studio-chip-text {
+  min-width: 0;
+  color: var(--fg-secondary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-chip-remove {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  /* --fg-muted lands at 4.60:1 on the chip wash — technically AA and exactly
+     the kind of "looks deliberate" margin the v0.2 audit caught. One step up
+     to 6.5:1 instead. */
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-chip-remove:hover {
+  background: var(--danger-surface);
+  color: var(--danger);
+}
+
+.studio-chip-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── The prompt ───────────────────────────────────────────────────────── */
+
+#studio-prompt {
+  width: 100%;
+  min-height: 92px;
+  max-height: 40vh;
+  resize: none;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--studio-prompt-size);
+  line-height: 1.5;
+  outline: none;
+}
+
+/* --fg-faint (3.6:1) is the house placeholder colour and it is wrong for the
+   largest input in the app; --fg-muted clears AA at 4.8:1 here. */
+#studio-prompt::placeholder {
+  color: var(--fg-muted);
+}
+
+/* The card lights on :focus-within; the keyboard ring is a distinct, brighter
+   colour so a tabbed-to prompt is never confused with a clicked-into one. */
+#studio-prompt:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 4px;
+  border-radius: var(--r-inline);
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────── */
+
+#studio-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border-hairline);
+}
+
+.studio-toolbar-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Targeted by id (the frozen inventory) AND by S1's shared class, so a fourth
+   toolbar button added later is styled the day it appears. */
+#studio-tools-btn,
+#studio-attach-btn,
+#studio-preview-toggle,
+.studio-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+#studio-tools-btn:hover,
+#studio-attach-btn:hover,
+#studio-preview-toggle:hover,
+.studio-toolbar-btn:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+}
+
+#studio-tools-btn:focus-visible,
+#studio-attach-btn:focus-visible,
+#studio-preview-toggle:focus-visible,
+.studio-toolbar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#studio-tools-btn[aria-expanded="true"] {
+  background: #4488ff1a;
+  border-color: var(--accent-dim);
+  color: var(--accent-hover);
+}
+
+#studio-tools-btn:disabled,
+#studio-attach-btn:disabled,
+#studio-preview-toggle:disabled,
+.studio-toolbar-btn:disabled {
+  background: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* ── The three-state preview switch ───────────────────────────────────────
+   auto / on / off, distinguished by the SHAPE of the leading dot as well as
+   its colour: half-filled, filled, hollow. A role=switch with three meanings
+   cannot afford to be colour-only. */
+
+#studio-preview-toggle::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1px solid var(--accent-label);
+  background: linear-gradient(135deg, var(--accent-label) 0 50%, transparent 50% 100%);
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
+}
+
+#studio-preview-toggle[data-mode="on"] {
+  background: #4488ff1a;
+  border-color: var(--accent-dim);
+  color: var(--accent-hover);
+}
+
+#studio-preview-toggle[data-mode="on"]::before {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+#studio-preview-toggle[data-mode="off"] {
+  color: var(--fg-muted);
+}
+
+#studio-preview-toggle[data-mode="off"]::before {
+  background: none;
+  border: 2px solid var(--fg-muted);
+}
+
+/* ── The hint and the primary action ──────────────────────────────────── */
+
+#studio-hint {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The most confident thing on the screen. Both gradient stops clear 4.5:1
+   against white, so the hover slide across the gradient cannot drop the label
+   below AA — which is exactly why hover moves the gradient rather than
+   brightening the fill (brightening #3570d8 lands white at 3.8:1). */
+#studio-submit {
+  flex: 0 0 auto;
+  padding: 11px 26px;
+  border: 1px solid #6f8ff5;
+  border-radius: var(--r-modal);
+  background-image: linear-gradient(120deg, var(--studio-go-a) 0%, var(--studio-go-b) 55%, var(--studio-go-a) 100%);
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  color: #ffffff;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(53, 112, 216, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: background-position var(--t-slow) var(--ease),
+              box-shadow var(--t-base) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease);
+}
+
+#studio-submit:hover:not(:disabled) {
+  background-position: 100% 50%;
+  border-color: #93aefb;
+  box-shadow: 0 8px 28px rgba(91, 69, 200, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+#studio-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 3px 12px rgba(53, 112, 216, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+#studio-submit:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 3px;
+}
+
+/* Coloured, not faded: a flat slate plane with a muted outline, against the
+   enabled state's saturated gradient. The label stays at 4.6:1 because this
+   button is where the app says WHY it cannot run yet — an unreadable
+   explanation is the v0.2 bug wearing a different hat. */
+#studio-submit:disabled {
+  background-image: none;
+  background-color: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+  box-shadow: none;
+  transform: none;
+}
+
+/* ── The tools menu ───────────────────────────────────────────────────────
+   The inventory places this as a sibling of #studio-console, so it is styled
+   as an in-flow drawer tucked under the console rather than a floating popup
+   anchored to a button it is not a descendant of. The second rule is
+   insurance: if S1 nests it in the console or the toolbar instead, it floats
+   correctly from there without a change to this sheet. */
+
+#studio-tools-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--s4);
+  margin-top: calc(var(--s5) * -1 + var(--s2));
+  padding: var(--s4);
+  background: var(--surface-3);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+}
+
+#studio-console #studio-tools-menu,
+#studio-toolbar #studio-tools-menu {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  left: 0;
+  right: 0;
+  margin-top: 0;
+  z-index: var(--z-popover);
+}
+
+.studio-tools-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.studio-tools-group-label {
+  padding: 0 var(--s2) var(--s1);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+}
+
+/* S1 puts a label AND a hint inside each option, so this is a two-row grid
+   with the checkbox spanning both — not a single flex row. */
+.studio-tool-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s2);
+  row-gap: 1px;
+  width: 100%;
+  padding: 7px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+/* A real checkbox box, so "on" is a shape as well as a colour. The tick is
+   always in the DOM and simply transparent when unchecked, which keeps the
+   box the same size in both states and stops the row from reflowing. */
+.studio-tool-option::before {
+  content: '✓';
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--border-control);
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: transparent;
+  font-size: 11px;
+  line-height: 1;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-tool-option:hover {
+  background: var(--hover-wash);
+  color: var(--fg);
+}
+
+.studio-tool-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.studio-tool-option[aria-checked="true"] {
+  color: var(--fg);
+}
+
+.studio-tool-option[aria-checked="true"]::before {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+/* Coloured, not faded — but a filled row in a menu reads as HIGHLIGHTED, which
+   is the opposite of the message. The colour shift lives on the text and the
+   box instead, and the box goes dashed so the state is a shape too. */
+.studio-tool-option:disabled {
+  color: var(--studio-off-fg);
+  background: none;
+}
+
+.studio-tool-option:disabled::before {
+  border-style: dashed;
+  border-color: var(--studio-off-fg);
+  background: none;
+}
+
+/* ── Tool field panels ────────────────────────────────────────────────── */
+
+#studio-tool-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--s3);
+  align-items: start;
+}
+
+#studio-tool-fields:empty {
+  display: none;
+}
+
+.studio-tool-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  min-width: 0;
+}
+
+/* The chrome-label register is the head's DEFAULT, so a head that is just text
+   still reads right; the note and the Remove button opt back out below. */
+.studio-tool-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+}
+
+.studio-tool-panel-label {
+  flex: 0 0 auto;
+}
+
+/* Only ever non-empty when compile() reported a reason worth stating
+   ("not used when making sculpts"). --warn on --surface-1 is 9.6:1. */
+.studio-tool-panel-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--warn);
+}
+
+.studio-tool-panel-note:empty {
+  display: none;
+}
+
+/* This was a raw UA button — grey chrome on a dark dashboard. */
+.studio-tool-panel-remove {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-tool-panel-remove:hover {
+  background: var(--danger-surface);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.studio-tool-panel-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.studio-tool-panel-remove:disabled {
+  color: var(--studio-off-fg);
+  background: none;
+}
+
+.studio-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  min-width: 0;
+}
+
+.studio-field-label {
+  flex: 0 0 auto;
+  min-width: 78px;
+  font-size: var(--studio-text-sm);
+  color: var(--fg-muted);
+}
+
+.studio-field-input {
+  flex: 1 1 90px;
+  min-width: 0;
+  padding: 5px var(--s2);
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-inline);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+select.studio-field-input {
+  cursor: pointer;
+}
+
+input[type="checkbox"].studio-field-input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.studio-field-input::placeholder {
+  color: var(--fg-muted);
+}
+
+.studio-field-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.studio-field-input:disabled {
+  background: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* ── The routing decision, in plain words ─────────────────────────────────
+   Same language as the guided grid's #route-note: an inset accent rule, the
+   sentence, and the override right next to it. Never a black box. */
+
+#studio-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--surface-1);
+  border-radius: var(--r-panel);
+  box-shadow: inset 3px 0 0 var(--accent);
+  line-height: 1.45;
+}
+
+#studio-route[data-route="confirm"] {
+  box-shadow: inset 3px 0 0 var(--cp-generated);
+}
+
+#studio-route-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: var(--studio-text);
+  color: var(--accent-label);
+}
+
+#studio-route[data-route="confirm"] #studio-route-text {
+  color: var(--cp-generated);
+}
+
+#studio-route-override {
+  flex: 0 0 auto;
+  padding: 2px 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  color: var(--accent-hover);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+
+#studio-route-override:hover {
+  color: var(--fg);
+}
+
+#studio-route-override:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#studio-route-override:disabled {
+  color: var(--studio-off-fg);
+  text-decoration: none;
+}
+
+/* ── The pre-image stage ──────────────────────────────────────────────── */
+
+#studio-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+}
+
+#studio-stage-title {
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+#studio-stage-note {
+  font-size: var(--studio-text-sm);
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+/* ── Stepper ──────────────────────────────────────────────────────────────
+   S1 owns the state hook; the three spellings it could plausibly use are all
+   accepted so the stepper cannot silently render stateless. */
+
+#studio-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.studio-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--studio-text-sm);
+  font-weight: 600;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.studio-step::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-control);
+  transition: background var(--t-base) var(--ease),
+              box-shadow var(--t-base) var(--ease);
+}
+
+.studio-step:not(:last-child)::after {
+  content: '';
+  width: 22px;
+  height: 1px;
+  margin-left: 6px;
+  background: var(--border-panel);
+}
+
+.studio-step.is-active,
+.studio-step[aria-current],
+.studio-step[data-state="active"] {
+  color: var(--accent-hover);
+}
+
+.studio-step.is-active::before,
+.studio-step[aria-current]::before,
+.studio-step[data-state="active"]::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(68, 136, 255, 0.22);
+}
+
+.studio-step.is-done,
+.studio-step[data-state="done"] {
+  color: var(--geometry);
+}
+
+.studio-step.is-done::before,
+.studio-step[data-state="done"]::before {
+  background: var(--geometry);
+}
+
+#studio-stage-elapsed {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Candidates ───────────────────────────────────────────────────────────
+   Large by intent: this choice is made by eye, so these are not thumbnails
+   (the same call style-confirm.css made for the gate). */
+
+#studio-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s3);
+}
+
+#studio-candidates:empty {
+  display: none;
+}
+
+.studio-candidate {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  background: var(--surface-viewport);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--t-fast) var(--ease),
+              box-shadow var(--t-base) var(--ease),
+              transform var(--t-base) var(--ease);
+}
+
+.studio-candidate:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+}
+
+.studio-candidate:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.studio-candidate-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: var(--surface-viewport);
+}
+
+.studio-candidate-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 6px var(--s2);
+  background: var(--surface-1);
+  border-top: 1px solid var(--border-hairline);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Picked — ring, border AND a badge. Green is the app's existing "this one
+   is the good outcome" colour (render / export / success). */
+.studio-candidate[aria-pressed="true"] {
+  border-color: var(--geometry);
+  box-shadow: 0 0 0 2px var(--geometry);
+}
+
+.studio-candidate[aria-pressed="true"]::after {
+  content: '✓';
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--geometry);
+  color: #06180d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Stage actions ────────────────────────────────────────────────────── */
+
+#studio-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+#studio-refine-input {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 7px var(--s3);
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+}
+
+#studio-refine-input::placeholder {
+  color: var(--fg-muted);
+}
+
+#studio-refine-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#studio-refine-input:disabled {
+  background: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* By class as well as by id: S1 ships a fifth stage button (#studio-stage-skip,
+   required by the degradation table) that the frozen inventory never named. */
+#studio-refine-btn,
+#studio-more-btn,
+#studio-use-btn,
+#studio-stage-cancel,
+.studio-stage-btn {
+  flex: 0 0 auto;
+  padding: 7px var(--s3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+#studio-refine-btn:hover:not(:disabled),
+#studio-more-btn:hover:not(:disabled),
+#studio-use-btn:hover:not(:disabled),
+#studio-stage-cancel:hover:not(:disabled),
+.studio-stage-btn:hover:not(:disabled) {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+}
+
+#studio-refine-btn:focus-visible,
+#studio-more-btn:focus-visible,
+#studio-use-btn:focus-visible,
+#studio-stage-cancel:focus-visible,
+.studio-stage-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* One obvious action in the stage, in the same family as #studio-submit but
+   one step quieter — the submit stays the loudest thing in the view. */
+#studio-use-btn,
+.studio-stage-primary {
+  border-color: var(--accent-dim);
+  background: #4488ff22;
+  color: var(--fg);
+}
+
+#studio-use-btn:hover:not(:disabled),
+.studio-stage-primary:hover:not(:disabled) {
+  background: #4488ff33;
+  border-color: var(--accent-hover);
+  color: var(--fg);
+}
+
+#studio-stage-cancel,
+.studio-stage-quiet {
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+#studio-refine-btn:disabled,
+#studio-more-btn:disabled,
+#studio-use-btn:disabled,
+#studio-stage-cancel:disabled,
+.studio-stage-btn:disabled {
+  background: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* ── Recent ───────────────────────────────────────────────────────────── */
+
+#studio-recent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+#studio-recent:empty {
+  display: none;
+}
+
+.studio-recent-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 320px;
+  padding: 5px 11px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-control);
+  color: var(--fg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-recent-item:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+}
+
+.studio-recent-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.studio-recent-item:disabled {
+  background: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* ══ Parts S1 ships that the frozen inventory never named ════════════════
+   The inventory is the contract, not the ceiling: S1 added a degradation
+   notice strip, an attachment mode toggle, per-option hints, field units,
+   round separators and an image fallback because the degradation table
+   demanded them. Reported to the integrator; styled here rather than left as
+   raw UA chrome on a dashboard. */
+
+/* ── Tool-option label + hint ─────────────────────────────────────────── */
+
+.studio-tool-option-label {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 600;
+}
+
+.studio-tool-option-hint {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: var(--text-meta);
+  line-height: 1.3;
+  color: var(--fg-muted);
+}
+
+.studio-tool-option-hint:empty {
+  display: none;
+}
+
+/* "not used when making sculpts". This repo refuses out loud instead of
+   greying out — the row stays clickable, full contrast, and says why. */
+.studio-tool-option.is-unavailable .studio-tool-option-hint {
+  color: var(--warn);
+}
+
+.studio-tools-empty {
+  grid-column: 1 / -1;
+  padding: var(--s2);
+  font-size: var(--studio-text-sm);
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+/* ── Chips S1 actually builds ─────────────────────────────────────────── */
+
+/* A tool switched on with nothing typed in it. Not an error and not disabled —
+   a dashed outline says "waiting for you" without touching opacity. */
+.studio-chip.is-empty {
+  background: none;
+  border-style: dashed;
+  border-color: var(--border-control);
+}
+
+.studio-chip.is-empty .studio-chip-label {
+  color: var(--fg-muted);
+}
+
+.studio-chip.is-empty .studio-chip-text {
+  color: var(--fg-muted);
+}
+
+/* Reference vs Recreate, switched from the chip itself. */
+.studio-chip-mode {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 1px 8px;
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  background: var(--surface-0);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--text-chrome);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-chip-mode:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+}
+
+.studio-chip-mode:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.studio-chip-mode:disabled {
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* ── Field units ──────────────────────────────────────────────────────── */
+
+.studio-field-unit {
+  flex: 0 0 auto;
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Drag-and-drop onto the console ───────────────────────────────────── */
+
+#studio-console.is-drop-target {
+  border-color: var(--cp-generated);
+  box-shadow: var(--e-floating),
+              0 0 0 2px var(--cp-generated),
+              0 0 36px rgba(176, 124, 255, 0.22);
+}
+
+/* ── Degradation notices ──────────────────────────────────────────────────
+   "claw-gen isn't installed", "the tools couldn't be read". Said once,
+   quietly, and never a dead end: each row carries its own way forward. */
+
+#studio-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.studio-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+.studio-note-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: var(--studio-text-sm);
+  line-height: 1.45;
+  color: var(--fg-secondary);
+}
+
+.studio-note-btn {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-inline);
+  background: var(--surface-2);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--studio-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-note-btn:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+}
+
+.studio-note-dismiss {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.studio-note-dismiss:hover {
+  background: var(--hover-wash);
+  color: var(--fg);
+}
+
+.studio-note-btn:focus-visible,
+.studio-note-dismiss:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.studio-note-btn:disabled,
+.studio-note-dismiss:disabled {
+  background: var(--studio-off);
+  border-color: var(--studio-off-fg);
+  color: var(--studio-off-fg);
+}
+
+/* ── Stage extras ─────────────────────────────────────────────────────────
+   S1's stepper states are is-running / is-done / is-failed; the earlier
+   is-active / [data-state] spellings stay accepted so neither package has to
+   move. Failure is a colour AND a hollow ring, not colour alone. */
+
+.studio-step.is-running {
+  color: var(--accent-hover);
+}
+
+.studio-step.is-running::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(68, 136, 255, 0.22);
+}
+
+.studio-step.is-failed {
+  color: var(--danger);
+}
+
+.studio-step.is-failed::before {
+  background: none;
+  border: 2px solid var(--danger);
+  box-sizing: border-box;
+}
+
+/* The "set 1 / set 2" separator between rounds. Full-width inside the grid so
+   earlier rounds stay visible and legible underneath their own heading. */
+.studio-round {
+  grid-column: 1 / -1;
+  margin-top: var(--s1);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-round:first-child {
+  margin-top: 0;
+}
+
+/* An image that could not be read still has to say so — never a blank box. */
+.studio-candidate-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s3);
+  text-align: center;
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  font-size: var(--studio-text-sm);
+  line-height: 1.4;
+}
+
+/* ── Recent ───────────────────────────────────────────────────────────── */
+
+.studio-recent-title {
+  flex: 1 1 100%;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--studio-text);
+  font-weight: 600;
+  color: var(--fg-secondary);
+}
+
+.studio-recent-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────
+   style.css already forces every duration to .01ms under reduce; this block
+   goes further and removes the things a zero-duration transition would not
+   help with — the infinite ambient drift and the hover lifts. */
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-glow {
+    animation: none;
+    transform: none;
+  }
+
+  .studio-type:hover,
+  .studio-candidate:hover,
+  #studio-submit:active:not(:disabled) {
+    transform: none;
+  }
+
+  #studio-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #studio-scroll {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ── Narrow windows ───────────────────────────────────────────────────────
+   The auto-fit grids already reflow on their own; only the fixed minimums and
+   the console's padding need a nudge below ~760px of content width. */
+
+@media (max-width: 820px) {
+  #studio-types {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  #studio-tool-fields,
+  #studio-tools-menu {
+    grid-template-columns: 1fr;
+  }
+
+  #studio-candidates {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  #studio-console {
+    padding: var(--s3);
+  }
+
+  #studio-submit {
+    flex: 1 1 100%;
+    padding: 12px var(--s4);
+  }
+}

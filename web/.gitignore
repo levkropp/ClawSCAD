@@ -1,0 +1,3 @@
+# The esbuild output. Built by `node web/build.js`; never committed, exactly as
+# the desktop app's dist/ is not.
+dist/

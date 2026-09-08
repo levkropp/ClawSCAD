@@ -1,0 +1,188 @@
+/* style-onboarding.css — P5 (onboarding + copy). Owned exclusively by the
+   onboarding package (arch-map §4.1: nobody else styles these selectors).
+   Reuses the existing :root token ladder from style.css unchanged — no new
+   hues are introduced (master plan §8.1). */
+
+/* #viewports-container is P0's element, but no other package styles it —
+   this rule only adds the positioning context the onboarding overlay needs
+   and changes nothing else about its layout (still flex:1, min-height:200px
+   from style.css). */
+#viewports-container {
+  position: relative;
+}
+
+/* The overlay wrapper spans the viewport but never intercepts clicks meant
+   for the canvas/toolbar underneath — only #onboarding-card itself (and its
+   children) opt back into pointer-events. This keeps #viewport and its
+   canvas fully interactive and attached at all times (app.spec.js:67,507),
+   and never restructures #render-overlay (app.spec.js / ui-surfaces.spec.js
+   both assert opacity:0 at rest there — this is a separate sibling, not a
+   new layer inside it). */
+#onboarding-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s4);
+  pointer-events: none;
+  z-index: var(--z-panel-float);
+}
+
+#onboarding-overlay[hidden] {
+  display: none;
+}
+
+#onboarding-card {
+  pointer-events: auto;
+  max-width: 520px;
+  width: 100%;
+  background: var(--surface-3);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+  padding: var(--s5) var(--s5) var(--s4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--s3);
+}
+
+#onboarding-title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+#onboarding-body {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--fg-secondary);
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+/* ── Starter cards ─────────────────────────────────────────────────────
+   148x96 per ux-spec §3.1, wrapping on narrow widths rather than shrinking
+   below a usable hit target (WCAG 2.2 AA — well over the 24x24 floor). */
+.onboard-start {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s3);
+  width: 100%;
+}
+
+.onboard-start-card {
+  width: 148px;
+  min-height: 96px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-panel);
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s3);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.onboard-start-card:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+}
+
+.onboard-start-card:active {
+  background: var(--active-wash);
+}
+
+.onboard-start-glyph {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.onboard-start-title {
+  font-size: var(--text-body);
+  color: var(--fg);
+  line-height: 1.35;
+}
+
+/* ── Environment checklist ─────────────────────────────────────────────
+   A checklist, not a banner (master plan §3 W5 / ux-spec §3.1): it states
+   the setup status of three things, one at a time is not the point — all
+   three show together, and this never duplicates or fights #env-banners
+   (which stays capped at one banner, elsewhere in the chrome). */
+.onboard-env {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.onboard-env-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+}
+
+.onboard-env-name {
+  color: var(--fg-muted);
+}
+
+.onboard-env-status {
+  font-weight: 600;
+  /* Not ready by default; .is-ready overrides. Colour is never the only
+     carrier — the text itself reads "Ready" vs. the named fault, never a
+     bare glyph (ux-spec §9.2). */
+  color: var(--warn);
+}
+
+.onboard-env-item.is-ready .onboard-env-status {
+  color: var(--geometry);
+}
+
+.onboard-env-fix {
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.onboard-env-fix:hover {
+  color: var(--accent-hover);
+}
+
+/* ── Responsive (ux-spec §7.5) ─────────────────────────────────────────
+   The card lives inside the viewport, which always keeps the majority of
+   the window at every breakpoint in this spec (the rail is what collapses
+   at <900px, not the viewport) — so the card only needs to reflow its own
+   internals, never hide. */
+@media (max-width: 640px) {
+  #onboarding-card {
+    padding: var(--s4) var(--s3) var(--s3);
+    gap: var(--s2);
+  }
+  .onboard-start-card {
+    width: 128px;
+    min-height: 84px;
+  }
+}
