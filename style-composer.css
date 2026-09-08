@@ -1,0 +1,299 @@
+/* style-composer.css — owned exclusively by P1 (composer). Uses the shared
+   :root tokens from style.css unchanged; new tokens (below) are additive
+   aliases so a future retune of --cp-generated moves the sculpt/image
+   target colour with it, per arch-map §4.1. */
+
+:root {
+  /* The composer must read as brighter than the panels around it — it is
+     the front door. */
+  --surface-composer: var(--surface-3);
+  --composer-edge: #4488ff1a;
+
+  /* Two accents only, matching the checkpoint tree's existing meaning:
+     parametric = blue, mesh-derived = violet. */
+  --target-part: var(--accent);
+  --target-sculpt: var(--cp-generated);
+  --target-image: var(--cp-generated);
+
+  --composer-min: 180px;
+  --console-min: 140px;
+}
+
+/* ── Right rail restructure ──────────────────────────────────────────── */
+
+#composer {
+  flex-shrink: 0;
+  height: 340px;
+  min-height: var(--composer-min);
+  max-height: 60%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-composer);
+  border-bottom: 1px solid var(--border-panel);
+  box-shadow: inset 0 1px 0 var(--composer-edge);
+  overflow: hidden;
+}
+
+#composer[hidden] {
+  display: none;
+}
+
+#rail-splitter {
+  height: 5px;
+  flex-shrink: 0;
+  background: var(--surface-raised);
+  cursor: row-resize;
+  position: relative;
+  transition: background var(--t-base) var(--ease);
+}
+
+#rail-splitter::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+
+#rail-splitter:hover,
+#rail-splitter.active {
+  background: var(--accent-dim);
+}
+
+#rail-splitter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The single hardest constraint in the plan: #terminal must stay visible
+   (app.spec.js:72-74). This floor holds regardless of composer sizing or
+   any bug in the JS clamp logic. */
+#terminal-pane-0 {
+  min-height: var(--console-min);
+}
+
+/* ── Composer body ────────────────────────────────────────────────────── */
+
+#composer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+  overflow-y: auto;
+}
+
+/* ── Target radiogroup — the largest control after the textarea (§1.1) ── */
+
+#composer-targets {
+  display: flex;
+  flex-shrink: 0;
+  border-radius: var(--r-control);
+  overflow: hidden;
+  border: 1px solid var(--border-control);
+}
+
+.target-btn {
+  flex: 1;
+  padding: var(--s2);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  border: none;
+  border-right: 1px solid var(--border-control);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 0 transparent;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
+}
+
+.target-btn:last-child {
+  border-right: none;
+}
+
+.target-btn:hover {
+  background: var(--hover-wash);
+  color: var(--fg);
+}
+
+.target-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Selected — colour + a 2px bottom bar in the target's accent + aria-checked
+   (never colour alone). Washes match the values already audited in the v2
+   UX spec's contrast table (§8.6: 5.28:1 / 5.79:1 at 12px, both AA). */
+.target-btn[data-target="part"].is-selected {
+  color: var(--target-part);
+  background: #10172f;
+  box-shadow: inset 0 -2px 0 0 var(--target-part);
+}
+
+.target-btn[data-target="sculpt"].is-selected,
+.target-btn[data-target="image"].is-selected {
+  color: var(--target-sculpt);
+  background: #191430;
+  box-shadow: inset 0 -2px 0 0 var(--target-sculpt);
+}
+
+/* ── Setup / degradation card ─────────────────────────────────────────
+   Additive above the prompt, never a replacement for it — the prompt and
+   submit stay reachable so "submit disabled only on empty prompt" always
+   holds, regardless of this machine's claude/claw-gen install state. */
+
+.composer-setup-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  background: var(--surface-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-panel);
+  padding: var(--s3);
+}
+
+.composer-setup-card strong {
+  color: var(--warn);
+  font-size: var(--text-body);
+}
+
+.composer-setup-card p {
+  color: var(--fg-muted);
+  font-size: var(--text-meta);
+  line-height: 1.4;
+}
+
+.composer-setup-actions {
+  display: flex;
+  gap: var(--s2);
+}
+
+/* ── Prompt ────────────────────────────────────────────────────────────── */
+
+#composer-prompt {
+  width: 100%;
+  flex-shrink: 0;
+  min-height: 66px;
+  max-height: 220px;
+  resize: vertical;
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  padding: var(--s2) var(--s3);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  line-height: 1.4;
+  user-select: text;
+}
+
+#composer-prompt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#composer-prompt::placeholder {
+  color: var(--fg-faint);
+}
+
+/* ── Section mount point (P2 uploads, P3 presets extend the composer here) */
+
+#composer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  flex-shrink: 0;
+}
+
+#composer-sections:empty {
+  display: none;
+}
+
+/* ── "What Claude will read" disclosure ──────────────────────────────── */
+
+#composer-preamble {
+  flex-shrink: 0;
+}
+
+#composer-preamble summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+  list-style: none;
+}
+
+#composer-preamble summary::-webkit-details-marker {
+  display: none;
+}
+
+#composer-preamble summary::before {
+  content: '▸ ';
+}
+
+#composer-preamble[open] summary::before {
+  content: '▾ ';
+}
+
+#composer-preamble-body {
+  margin-top: var(--s1);
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--surface-0);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-inline);
+  padding: var(--s2);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+/* ── Submit ───────────────────────────────────────────────────────────── */
+
+#composer-submit {
+  flex-shrink: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--accent-dim);
+  background: #4488ff22;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+#composer-submit:hover:not(:disabled) {
+  background: #4488ff33;
+  border-color: var(--accent-hover);
+}
+
+#composer-submit:active:not(:disabled) {
+  background: var(--surface-0);
+}
+
+#composer-submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Disabled is coloured, never faded — opacity stays 1 (asserted app-wide on
+   #gen-make3d-btn; the same binding rule applies to every new control). */
+#composer-submit:disabled {
+  opacity: 1;
+  color: var(--fg-disabled);
+  background: var(--surface-1);
+  border-color: var(--border-hairline);
+  cursor: not-allowed;
+}

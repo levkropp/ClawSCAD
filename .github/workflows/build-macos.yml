@@ -1,13 +1,17 @@
 name: Build macOS (dmg)
 
-# macOS runners cost 10x — only run on version tags or manual trigger
+# Verification only. This workflow does NOT publish releases — see the note in
+# build-windows.yml and docs/releasing.md. `scripts/release.ps1` owns the
+# update feed.
+#
+# macOS runners cost 10x, so this stays manual-only. It previously ran on
+# version tags, which is exactly the trigger that collided with the release
+# script; with the tag trigger gone, manual dispatch is the whole surface.
 on:
-  push:
-    tags: ['v*', '20*']
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -26,13 +30,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          D="${GITHUB_REF_NAME#v}"
-          SEMVER="${D:0:4}.$((10#${D:4:2})).$((10#${D:6:2}))"
-          npm version --no-git-tag-version "$SEMVER"
 
       - name: Cache OpenSCAD vendor binary
         uses: actions/cache@v4
@@ -57,9 +54,3 @@ jobs:
           name: ClawSCAD-macOS-dmg
           path: release/*.dmg
           if-no-files-found: warn
-
-      - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*.dmg

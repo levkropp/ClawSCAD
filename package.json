@@ -1,40 +1,70 @@
 {
   "name": "clawscad",
-  "version": "0.1.0",
+  "version": "0.6.1",
   "description": "AI-powered 3D CAD — OpenSCAD + Claude Code with checkpoint branching",
   "main": "main.js",
   "scripts": {
-    "postinstall": "electron-rebuild -f -w node-pty",
     "build:renderer": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\" && esbuild renderer.js --bundle --outfile=dist/renderer.js --format=esm --platform=browser --loader:.ttf=file",
     "download-openscad": "node scripts/download-openscad.js",
     "start": "npm run build:renderer && electron . --no-sandbox",
     "dev": "npm run build:renderer && electron . --dev --no-sandbox",
-    "test": "npm run build:renderer && npx playwright test",
+    "test:harness": "node scripts/check-native-deps.js && node tests/error-handler-survival.js && node tests/render-fault-classify.js && node tests/preset-merge.js && node tests/route.js && node tests/tools.js && node tests/composer-state.js && node tests/scad-params.js",
+    "test": "npm run build:renderer && npm run test:harness && npx playwright test",
     "test:headed": "npm run build:renderer && npx playwright test --headed",
     "pack": "npm run download-openscad && npm run build:renderer && electron-builder --dir",
     "dist": "npm run download-openscad && npm run build:renderer && electron-builder",
     "dist:linux": "npm run download-openscad && npm run build:renderer && electron-builder --linux",
     "dist:win": "npm run download-openscad && npm run build:renderer && electron-builder --win",
-    "dist:mac": "npm run download-openscad && npm run build:renderer && electron-builder --mac"
+    "dist:mac": "npm run download-openscad && npm run build:renderer && electron-builder --mac",
+    "release": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1",
+    "release:dry": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -DryRun"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "chokidar": "^3.6.0",
+    "electron-updater": "^6.8.9",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.0.0",
     "three": "^0.170.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
+    "@electron/rebuild": "^4.2.0",
     "@playwright/test": "^1.58.2",
-    "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "electron-playwright-helpers": "^2.1.0",
-    "esbuild": "^0.28.0"
+    "esbuild": "^0.28.1"
   },
   "overrides": {
-    "dompurify": "^3.4.5"
+    "dompurify": "^3.4.13",
+    "tar": "^7.5.18",
+    "js-yaml": "^4.3.0",
+    "form-data": "^4.0.6",
+    "tmp": "^0.2.6",
+    "@tootallnate/once": "^2.0.1",
+    "ip-address": "^10.1.1",
+    "@xmldom/xmldom": "^0.8.13",
+    "lodash": "^4.18.0",
+    "builder-util-runtime": "^9.7.0",
+    "minimatch@3.x": {
+      "brace-expansion": "^1.1.16"
+    },
+    "minimatch@9.x": {
+      "brace-expansion": "^2.1.2"
+    },
+    "minimatch@10.x": {
+      "brace-expansion": "^5.0.7"
+    },
+    "anymatch": {
+      "picomatch": "^2.3.2"
+    },
+    "readdirp": {
+      "picomatch": "^2.3.2"
+    },
+    "tinyglobby": {
+      "picomatch": "^4.0.4"
+    }
   },
   "build": {
     "appId": "com.clawscad.app",
@@ -42,59 +72,117 @@
       "output": "release"
     },
     "productName": "ClawSCAD",
+    "npmRebuild": false,
     "artifactName": "${productName}-${version}.${ext}",
     "files": [
       "main.js",
       "preload.js",
       "index.html",
       "style.css",
+      "style-composer.css",
+      "style-uploads.css",
+      "style-presets.css",
+      "style-gallery.css",
+      "style-onboarding.css",
+      "style-categories.css",
+      "style-confirm.css",
+      "style-studio.css",
       "icon.png",
       "dist/**/*",
+      "main/**/*",
+      "presets/**/*",
       "node_modules/**/*",
       "!node_modules/.cache"
     ],
     "extraResources": [
-      { "from": "icon.png", "to": "icon.png" }
+      {
+        "from": "icon.png",
+        "to": "icon.png"
+      }
     ],
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "icon.png",
       "category": "Graphics",
       "extraResources": [
-        { "from": "vendors/openscad-linux.AppImage", "to": "openscad-linux.AppImage" }
+        {
+          "from": "vendors/openscad-linux.AppImage",
+          "to": "openscad-linux.AppImage"
+        }
       ]
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "icon.png",
       "extraResources": [
-        { "from": "vendors/openscad-win", "to": "openscad-win" }
-      ]
+        {
+          "from": "vendors/openscad-win",
+          "to": "openscad-win"
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "ClawSCAD"
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "icon": "icon.png",
       "category": "public.app-category.graphics-design",
       "extraResources": [
-        { "from": "vendors/OpenSCAD.app", "to": "OpenSCAD.app" }
+        {
+          "from": "vendors/OpenSCAD.app",
+          "to": "OpenSCAD.app"
+        }
       ]
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "levkropp",
+        "repo": "ClawSCAD",
+        "releaseType": "release"
+      }
+    ]
   },
   "license": "MIT"
 }

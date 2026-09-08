@@ -1,0 +1,410 @@
+{
+  "version": 1,
+  "_note": "v0.6 Studio tools. A tool is a small group of fields that compiles into (a) plain-English lines Claude reads, (b) words appended to the IMAGE prompt, and (c) claw-gen CLI flags. Data only — the compiler is renderer/tools.js and is pure, so tests/tools.js can exercise every rule with no DOM. Adding a tool is editing this file; nothing else needs to change. Overridable wholesale by a same-named file in userData/presets/.",
+
+  "_schema": {
+    "id": "stable, kebab-case, referenced by categories' auto lists",
+    "group": "geometry | fit | making | look — the section it appears under in the Tools menu",
+    "auto": "category ids that switch this tool on automatically; '*' means every category",
+    "targets": "which pipeline tracks offer it; omit for all three",
+    "fields": "kind is number | text | choice | toggle. Nothing is ever required.",
+    "lines": "prepended to what Claude reads. FIRST MATCHING RULE WINS, so order most-specific first.",
+    "imageWords": "appended to the image-generation prompt only. ALL matching rules apply.",
+    "flags": "claw-gen flags, keyed by action. ALL matching rules apply.",
+    "when": "field ids that must all have a value for the rule to fire; [] means 'whenever the tool is on'"
+  },
+
+  "groups": [
+    { "id": "geometry", "label": "Size & shape" },
+    { "id": "fit", "label": "How it fits" },
+    { "id": "making", "label": "How it prints" },
+    { "id": "look", "label": "How it looks" }
+  ],
+
+  "tools": [
+    {
+      "id": "dimensions",
+      "label": "Dimensions",
+      "glyph": "⤢",
+      "group": "geometry",
+      "hint": "Exact millimetres. The single biggest jump in accuracy.",
+      "auto": ["hardware", "bracket", "enclosure", "structural", "replacement"],
+      "fields": [
+        { "id": "x", "label": "Width", "kind": "number", "unit": "mm", "placeholder": "40" },
+        { "id": "y", "label": "Depth", "kind": "number", "unit": "mm", "placeholder": "25" },
+        { "id": "z", "label": "Height", "kind": "number", "unit": "mm", "placeholder": "12" },
+        {
+          "id": "ref",
+          "label": "Measured",
+          "kind": "choice",
+          "options": ["outside", "inside (usable space)"],
+          "default": "outside"
+        }
+      ],
+      "lines": [
+        {
+          "when": ["x", "y", "z", "ref"],
+          "text": "SIZE: {x} × {y} × {z} mm, measured {ref}. These numbers are contractual — expose them as named variables at the top of the file and do not round them to nicer values."
+        },
+        {
+          "when": ["x", "y", "z"],
+          "text": "SIZE: {x} × {y} × {z} mm (outside). These numbers are contractual — expose them as named variables at the top of the file and do not round them."
+        },
+        { "when": ["x", "y"], "text": "FOOTPRINT: {x} × {y} mm. Contractual; expose both as variables." },
+        { "when": ["x", "z"], "text": "SIZE: {x} mm across × {z} mm tall. Contractual; expose both as variables." },
+        { "when": ["z"], "text": "HEIGHT: {z} mm. Contractual; expose it as a variable." },
+        { "when": ["x"], "text": "WIDTH: {x} mm. Contractual; expose it as a variable." }
+      ],
+      "flags": [{ "when": ["z"], "action": "mesh", "args": ["--size-mm", "{z}"] }]
+    },
+
+    {
+      "id": "hardware",
+      "label": "Hardware",
+      "glyph": "🔩",
+      "group": "fit",
+      "hint": "Screws, inserts, nut traps — sized from the tables, never from memory.",
+      "auto": ["hardware", "bracket", "furniture"],
+      "targets": ["part"],
+      "fields": [
+        {
+          "id": "thread",
+          "label": "Thread",
+          "kind": "choice",
+          "options": ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "#6 wood screw", "#8 wood screw"]
+        },
+        {
+          "id": "method",
+          "label": "Fixed by",
+          "kind": "choice",
+          "options": ["clearance hole", "tapped into plastic", "heat-set insert", "nut trap", "self-tapping"]
+        },
+        { "id": "count", "label": "How many", "kind": "number", "placeholder": "4" }
+      ],
+      "lines": [
+        {
+          "when": ["thread", "method", "count"],
+          "text": "HARDWARE: {count} × {thread}, {method}. Take every diameter, pitch, insert bore and clearance from the FITS SCREWS AND PARTS tables — never from memory, never rounded. State in a comment which table row each number came from."
+        },
+        {
+          "when": ["thread", "method"],
+          "text": "HARDWARE: {thread}, {method}. Take every diameter, pitch, insert bore and clearance from the FITS SCREWS AND PARTS tables — never from memory, never rounded."
+        },
+        {
+          "when": ["thread"],
+          "text": "HARDWARE: {thread}. Take the diameter and clearance from the FITS SCREWS AND PARTS tables, not from memory."
+        },
+        {
+          "when": ["method"],
+          "text": "HARDWARE: fixed by {method}. Size the feature from the FITS SCREWS AND PARTS tables."
+        }
+      ]
+    },
+
+    {
+      "id": "fit",
+      "label": "Fit & tolerance",
+      "glyph": "◎",
+      "group": "fit",
+      "hint": "How tight it should be on the thing it mates with.",
+      "auto": ["bracket", "enclosure", "replacement"],
+      "targets": ["part"],
+      "fields": [
+        { "id": "mates", "label": "Mates with", "kind": "text", "placeholder": "a 6 mm round cable" },
+        {
+          "id": "fit",
+          "label": "Should feel",
+          "kind": "choice",
+          "options": ["press fit (needs force)", "snug (hand pressure)", "slip fit (drops in)", "loose (rattles free)"]
+        },
+        { "id": "gap", "label": "Clearance", "kind": "number", "unit": "mm", "placeholder": "0.2" }
+      ],
+      "lines": [
+        {
+          "when": ["mates", "fit", "gap"],
+          "text": "FIT: mates with {mates}; should feel like a {fit}; use {gap} mm clearance on the mating face. Put the clearance in its own variable so it can be reprinted tighter or looser without touching the geometry."
+        },
+        {
+          "when": ["mates", "fit"],
+          "text": "FIT: mates with {mates}; should feel like a {fit}. Choose the clearance for that feel on an FDM printer, put it in its own named variable, and say in a comment what value you chose and why."
+        },
+        { "when": ["mates", "gap"], "text": "FIT: mates with {mates}; {gap} mm clearance on the mating face, as a named variable." },
+        { "when": ["fit", "gap"], "text": "FIT: {fit}, {gap} mm clearance, as a named variable." },
+        { "when": ["mates"], "text": "FIT: this has to mate with {mates}. Leave printer clearance on that face and expose it as a variable." },
+        { "when": ["fit"], "text": "FIT: it should feel like a {fit}. Pick the clearance for that, as a named variable, and say what you chose." },
+        { "when": ["gap"], "text": "FIT: {gap} mm clearance on every mating face, as a named variable." }
+      ]
+    },
+
+    {
+      "id": "mounting",
+      "label": "Mounting",
+      "glyph": "✛",
+      "group": "fit",
+      "hint": "How it attaches to the world.",
+      "auto": ["bracket"],
+      "targets": ["part"],
+      "fields": [
+        {
+          "id": "style",
+          "label": "Attaches by",
+          "kind": "choice",
+          "options": ["screws to a wall", "screws to a flat panel", "VESA pattern", "DIN rail", "adhesive pad", "clamps on", "magnets", "free-standing"]
+        },
+        { "id": "spacing", "label": "Hole spacing", "kind": "text", "unit": "mm", "placeholder": "75 × 75" },
+        { "id": "countersink", "label": "Countersunk heads", "kind": "toggle" }
+      ],
+      "lines": [
+        {
+          "when": ["style", "spacing", "countersink"],
+          "text": "MOUNTING: {style}, hole pattern {spacing} mm, countersunk so the heads finish flush or below the surface. Expose the pattern as variables."
+        },
+        { "when": ["style", "spacing"], "text": "MOUNTING: {style}, hole pattern {spacing} mm. Expose the pattern as variables." },
+        { "when": ["style", "countersink"], "text": "MOUNTING: {style}, countersunk so the heads finish flush or below the surface." },
+        { "when": ["style"], "text": "MOUNTING: {style}. Design the mounting feature for that specifically, not a generic tab." },
+        { "when": ["spacing"], "text": "MOUNTING: hole pattern {spacing} mm, exposed as variables." }
+      ]
+    },
+
+    {
+      "id": "existing-part",
+      "label": "The part it replaces",
+      "glyph": "⌗",
+      "group": "fit",
+      "hint": "What broke, and the numbers you measured off it.",
+      "auto": ["replacement"],
+      "targets": ["part"],
+      "fields": [
+        { "id": "what", "label": "It belongs to", "kind": "text", "placeholder": "a Bosch dishwasher rack" },
+        { "id": "measured", "label": "Measured", "kind": "text", "unit": "mm", "placeholder": "18.4 shaft, 32 centres, 6 deep" },
+        {
+          "id": "confidence",
+          "label": "Measured with",
+          "kind": "choice",
+          "options": ["callipers", "a ruler", "guessed from a photo"]
+        }
+      ],
+      "lines": [
+        {
+          "when": ["what", "measured", "confidence"],
+          "text": "REPLACES: a part from {what}. Measured {measured} (measured with {confidence}). Treat callipered numbers as exact and ruler/photo numbers as ±0.5 mm — where a number is uncertain, expose it as a variable and add a one-line comment saying to reprint after checking that dimension."
+        },
+        { "when": ["what", "measured"], "text": "REPLACES: a part from {what}. Measured {measured}. Expose every measured number as a named variable so a bad measurement is a one-line fix." },
+        { "when": ["measured"], "text": "MEASURED OFF THE BROKEN PART: {measured}. Expose each of these as a named variable." },
+        { "when": ["what"], "text": "REPLACES: a part from {what}." }
+      ]
+    },
+
+    {
+      "id": "text",
+      "label": "Text & engraving",
+      "glyph": "Ag",
+      "group": "geometry",
+      "hint": "Lettering that survives a 0.4 mm nozzle.",
+      "auto": [],
+      "targets": ["part"],
+      "fields": [
+        { "id": "text", "label": "Says", "kind": "text", "placeholder": "WORKSHOP" },
+        { "id": "mode", "label": "Cut or raised", "kind": "choice", "options": ["engraved (cut in)", "embossed (raised)"] },
+        { "id": "where", "label": "On the", "kind": "text", "placeholder": "top face" },
+        { "id": "depth", "label": "Depth", "kind": "number", "unit": "mm", "placeholder": "0.8" }
+      ],
+      "lines": [
+        {
+          "when": ["text", "mode", "where", "depth"],
+          "text": "TEXT: \"{text}\", {mode}, on the {where}, {depth} mm deep. Keep every stroke at least 0.9 mm wide (two 0.4 mm perimeters) or it will not print — scale the text up rather than thinning it, and say in a comment what size you landed on."
+        },
+        { "when": ["text", "mode", "depth"], "text": "TEXT: \"{text}\", {mode}, {depth} mm deep. Keep every stroke at least 0.9 mm wide or it will not print at a 0.4 mm nozzle." },
+        { "when": ["text", "mode", "where"], "text": "TEXT: \"{text}\", {mode}, on the {where}. Use 0.6–1 mm depth and keep strokes at least 0.9 mm wide." },
+        { "when": ["text", "mode"], "text": "TEXT: \"{text}\", {mode}. Use 0.6–1 mm depth and keep every stroke at least 0.9 mm wide." },
+        { "when": ["text"], "text": "TEXT: the part carries the text \"{text}\". Engrave it 0.6–1 mm deep with strokes at least 0.9 mm wide." }
+      ],
+      "imageWords": [{ "when": ["text"], "text": "with the text \"{text}\" on it" }]
+    },
+
+    {
+      "id": "strength",
+      "label": "Strength",
+      "glyph": "▦",
+      "group": "making",
+      "hint": "What it has to survive. Drives walls and orientation.",
+      "auto": ["structural", "furniture"],
+      "targets": ["part"],
+      "fields": [
+        {
+          "id": "duty",
+          "label": "Duty",
+          "kind": "choice",
+          "options": ["decorative (no load)", "light daily handling", "takes real load", "safety-critical"]
+        },
+        { "id": "load", "label": "Load runs", "kind": "choice", "options": ["straight down", "sideways / bending", "pulling apart", "twisting"] },
+        { "id": "walls", "label": "Wall thickness", "kind": "number", "unit": "mm", "placeholder": "3" }
+      ],
+      "lines": [
+        {
+          "when": ["duty", "load", "walls"],
+          "text": "STRENGTH: {duty}; the load runs {load}; walls {walls} mm. Orient the part so that load runs in the bed plane, never across layer lines, and say in a comment which face goes on the bed and why."
+        },
+        {
+          "when": ["duty", "load"],
+          "text": "STRENGTH: {duty}; the load runs {load}. Orient the part so that load runs in the bed plane, never across layer lines, and say in a comment which face goes on the bed. Thicken walls and add fillets at the loaded root."
+        },
+        { "when": ["duty", "walls"], "text": "STRENGTH: {duty}; walls {walls} mm, as a named variable." },
+        { "when": ["duty"], "text": "STRENGTH: {duty}. Size the walls and fillets for that, and state the assumption in a comment." },
+        { "when": ["load"], "text": "STRENGTH: the load runs {load}. Orient so that direction lies in the bed plane, and say which face goes down." },
+        { "when": ["walls"], "text": "STRENGTH: walls {walls} mm, as a named variable." }
+      ]
+    },
+
+    {
+      "id": "material",
+      "label": "Material",
+      "glyph": "◈",
+      "group": "making",
+      "hint": "Filament and environment. Changes clearances and geometry.",
+      "auto": [],
+      "targets": ["part"],
+      "fields": [
+        { "id": "filament", "label": "Filament", "kind": "choice", "options": ["PLA", "PETG", "ABS/ASA", "TPU (flexible)", "Nylon", "resin"] },
+        { "id": "where", "label": "Lives", "kind": "choice", "options": ["indoors", "outdoors / UV", "hot (car, near an engine)", "wet", "food contact"] }
+      ],
+      "lines": [
+        {
+          "when": ["filament", "where"],
+          "text": "MATERIAL: {filament}, used {where}. Account for it: PETG and TPU need larger clearances than PLA on mating faces; anything outdoors or hot must not be PLA and the geometry should not rely on it staying stiff. Say in one comment how the material changed a number."
+        },
+        { "when": ["filament"], "text": "MATERIAL: {filament}. PETG and TPU need larger mating clearances than PLA — adjust and say so in a comment." },
+        { "when": ["where"], "text": "ENVIRONMENT: this lives {where}. Do not assume PLA, and design the geometry so it does not depend on the part staying perfectly stiff." }
+      ]
+    },
+
+    {
+      "id": "printing",
+      "label": "Print settings",
+      "glyph": "⚙",
+      "group": "making",
+      "hint": "Nozzle, layers, supports — the constraints the geometry must respect.",
+      "auto": [],
+      "targets": ["part"],
+      "fields": [
+        { "id": "nozzle", "label": "Nozzle", "kind": "choice", "options": ["0.2", "0.4", "0.6", "0.8"], "unit": "mm", "default": "0.4" },
+        { "id": "layer", "label": "Layer height", "kind": "choice", "options": ["0.08", "0.12", "0.2", "0.28"], "unit": "mm" },
+        { "id": "supports", "label": "Supports", "kind": "choice", "options": ["design so none are needed", "supports are fine"] }
+      ],
+      "lines": [
+        {
+          "when": ["nozzle", "layer", "supports"],
+          "text": "PRINTING: {nozzle} mm nozzle, {layer} mm layers, {supports}. Every wall and every raised or cut detail must be a whole multiple of the nozzle width, and no unsupported overhang may exceed 45° unless supports were allowed."
+        },
+        { "when": ["nozzle", "supports"], "text": "PRINTING: {nozzle} mm nozzle, {supports}. Make every wall a whole multiple of the nozzle width, and keep overhangs under 45° unless supports were allowed." },
+        { "when": ["nozzle", "layer"], "text": "PRINTING: {nozzle} mm nozzle, {layer} mm layers. Make every wall a whole multiple of the nozzle width." },
+        { "when": ["supports"], "text": "PRINTING: {supports}. Keep unsupported overhangs under 45° and say in a comment which face goes on the bed." },
+        { "when": ["nozzle"], "text": "PRINTING: {nozzle} mm nozzle. Make every wall a whole multiple of that width." },
+        { "when": ["layer"], "text": "PRINTING: {layer} mm layers." }
+      ]
+    },
+
+    {
+      "id": "quantity",
+      "label": "Quantity",
+      "glyph": "⧉",
+      "group": "making",
+      "hint": "A set, arranged on one plate.",
+      "auto": [],
+      "targets": ["part"],
+      "fields": [
+        { "id": "count", "label": "How many", "kind": "number", "placeholder": "4" },
+        { "id": "arrange", "label": "Lay out on the plate", "kind": "toggle", "default": true }
+      ],
+      "lines": [
+        {
+          "when": ["count", "arrange"],
+          "text": "QUANTITY: {count} of these. Expose the count as a variable and arrange that many copies on the plate with a few millimetres between them, so one render is one print."
+        },
+        { "when": ["count"], "text": "QUANTITY: {count} of these. Expose the count as a variable." }
+      ]
+    },
+
+    {
+      "id": "style",
+      "label": "Style",
+      "glyph": "✦",
+      "group": "look",
+      "hint": "Form language. Steers the reference images, not the maths.",
+      "auto": ["model", "decor", "toy"],
+      "fields": [
+        {
+          "id": "form",
+          "label": "Form",
+          "kind": "choice",
+          "options": ["geometric", "organic / flowing", "minimal", "ornate", "low-poly / faceted", "chunky / toy-like", "industrial"]
+        },
+        {
+          "id": "finish",
+          "label": "Surface",
+          "kind": "choice",
+          "options": ["smooth", "matte", "ribbed / textured", "faceted"]
+        },
+        { "id": "like", "label": "In the spirit of", "kind": "text", "placeholder": "mid-century Danish" }
+      ],
+      "lines": [
+        { "when": ["form", "finish", "like"], "text": "STYLE: {form}, {finish} surface, in the spirit of {like}." },
+        { "when": ["form", "finish"], "text": "STYLE: {form}, {finish} surface." },
+        { "when": ["form", "like"], "text": "STYLE: {form}, in the spirit of {like}." },
+        { "when": ["form"], "text": "STYLE: {form}." },
+        { "when": ["finish"], "text": "STYLE: {finish} surface." },
+        { "when": ["like"], "text": "STYLE: in the spirit of {like}." }
+      ],
+      "imageWords": [
+        { "when": ["form"], "text": "{form} form language" },
+        { "when": ["finish"], "text": "{finish} surface" },
+        { "when": ["like"], "text": "in the spirit of {like}" }
+      ]
+    },
+
+    {
+      "id": "colour",
+      "label": "Colour",
+      "glyph": "◐",
+      "group": "look",
+      "hint": "The colour the checkpoint is tagged with, and the look of the previews.",
+      "auto": [],
+      "fields": [
+        {
+          "id": "name",
+          "label": "Colour",
+          "kind": "choice",
+          "options": ["Peru", "SteelBlue", "Crimson", "SeaGreen", "Goldenrod", "DimGray", "Ivory", "Black"]
+        }
+      ],
+      "lines": [{ "when": ["name"], "text": "COLOUR: tag the model {name} so it reads clearly in the viewport." }],
+      "imageWords": [{ "when": ["name"], "text": "in {name}" }],
+      "flags": [{ "when": ["name"], "action": "checkpoint", "args": ["--color", "{name}"] }]
+    },
+
+    {
+      "id": "detail",
+      "label": "Mesh detail",
+      "glyph": "◇",
+      "group": "look",
+      "hint": "How fine the generated mesh comes out. Costs time.",
+      "auto": [],
+      "targets": ["sculpt"],
+      "fields": [
+        {
+          "id": "level",
+          "label": "Detail",
+          "kind": "choice",
+          "options": ["draft (fast)", "standard", "fine (slow)"],
+          "default": "standard"
+        }
+      ],
+      "lines": [],
+      "flags": [
+        { "when": ["level"], "equals": { "level": "draft (fast)" }, "action": "prep", "args": ["--target-faces", "60000"] },
+        { "when": ["level"], "equals": { "level": "standard" }, "action": "prep", "args": ["--target-faces", "150000"] },
+        { "when": ["level"], "equals": { "level": "fine (slow)" }, "action": "prep", "args": ["--target-faces", "400000"] }
+      ]
+    }
+  ]
+}

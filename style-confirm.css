@@ -1,0 +1,437 @@
+/* style-confirm.css — P9 (visual confirm gate). Owned exclusively by the
+   confirm package. Follow #gallery-sheet's modal conventions in
+   style-gallery.css rather than inventing a second modal language.
+
+   Every colour below is an existing :root token from style.css or an alias of
+   one — no new colour language. The one deliberate departure from the gallery
+   is scale: this sheet asks a question and shows pictures a person chooses by
+   eye, so the type is bigger and the cards are large, not thumbnails. */
+
+:root {
+  /* Same scrim as the gallery — "you have stopped making and started
+     looking" reads identically here. */
+  --confirm-scrim: rgba(8, 8, 24, 0.78);
+  --confirm-card: var(--surface-3);
+  --confirm-card-hover: var(--surface-raised);
+  /* One step above the gallery (500) so a confirm opened while the gallery is
+     up still sits on top; still below toasts (1000). */
+  --confirm-z: 600;
+  --confirm-option-h: 200px;
+}
+
+#confirm-sheet[hidden] {
+  display: none;
+}
+
+#confirm-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: var(--confirm-z);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--confirm-scrim);
+  opacity: 0;
+  transition: opacity var(--t-slow) var(--ease);
+}
+
+#confirm-sheet.confirm-open .confirm-scrim {
+  opacity: 1;
+}
+
+.confirm-modal {
+  position: relative;
+  width: min(820px, 94vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-modal);
+  box-shadow: var(--e-overlay);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease);
+}
+
+#confirm-sheet.confirm-open .confirm-modal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-scrim,
+  .confirm-modal {
+    transition-duration: 0.01ms;
+  }
+}
+
+.confirm-close {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.confirm-close:hover {
+  color: var(--fg);
+  background: var(--hover-wash);
+}
+
+.confirm-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.confirm-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s5) var(--s5) var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+/* A calm question, not a dialog box: sentence case, generous, no uppercase
+   mono chrome label. */
+.confirm-title {
+  font-family: var(--font-ui);
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg);
+  padding-right: var(--s5);
+}
+
+/* The person's own sentence, handed back to them. */
+.confirm-echo {
+  font-size: var(--text-title);
+  line-height: 1.45;
+  color: var(--fg-secondary);
+  border-left: 2px solid var(--accent-dim);
+  padding: 2px 0 2px var(--s3);
+  user-select: text;
+}
+
+.confirm-note {
+  font-size: var(--text-ui);
+  line-height: 1.45;
+  color: var(--fg-muted);
+  min-height: 1em;
+}
+
+.confirm-note:empty {
+  display: none;
+}
+
+/* ── the questions the description didn't answer ─────────────────────── */
+
+.confirm-missing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-panel);
+  padding: var(--s3);
+}
+
+.confirm-missing-lead {
+  font-size: var(--text-body);
+  color: var(--fg-faint);
+}
+
+.confirm-missing-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  font-size: var(--text-ui);
+  color: var(--fg-secondary);
+}
+
+.confirm-missing-row > span {
+  flex: 0 0 46%;
+}
+
+.confirm-missing-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-control);
+  font-family: inherit;
+  font-size: var(--text-ui);
+  padding: 5px var(--s2);
+  user-select: text;
+}
+
+.confirm-missing-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── sections ─────────────────────────────────────────────────────────── */
+
+.confirm-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.confirm-section[hidden] {
+  display: none;
+}
+
+.confirm-section-head {
+  font-size: var(--text-ui);
+  color: var(--fg-secondary);
+}
+
+/* Big legible cards — the choice is made by eye, so these are not
+   thumbnails. */
+.confirm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--s3);
+}
+
+.confirm-option {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  background: var(--confirm-card);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.confirm-option:hover {
+  background: var(--confirm-card-hover);
+  border-color: var(--border-hover);
+}
+
+.confirm-option img {
+  display: block;
+  width: 100%;
+  height: var(--confirm-option-h);
+  object-fit: cover;
+  background: var(--surface-viewport);
+}
+
+.confirm-option-fallback {
+  height: var(--confirm-option-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-viewport);
+  color: var(--fg-faint);
+  font-size: var(--text-body);
+}
+
+.confirm-option:focus-visible,
+.confirm-option.is-picked {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--accent);
+}
+
+.confirm-option-score {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  padding: 1px 6px;
+  border-radius: var(--r-inline);
+  background: var(--surface-0);
+  border: 1px solid var(--border-control);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+}
+
+.confirm-option-score[hidden] {
+  display: none;
+}
+
+/* ── the user's own photo ─────────────────────────────────────────────── */
+
+.confirm-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--r-panel);
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  font-size: var(--text-ui);
+}
+
+.confirm-dropzone.is-over {
+  border-color: var(--accent);
+  background: var(--active-wash);
+  color: var(--fg);
+}
+
+.confirm-thumb {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  font-size: var(--text-body);
+  color: var(--fg-secondary);
+}
+
+.confirm-thumb[hidden] {
+  display: none;
+}
+
+.confirm-thumb img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--r-control);
+  border: 1px solid var(--border-panel);
+  background: var(--surface-viewport);
+}
+
+.confirm-thumb img[hidden] {
+  display: none;
+}
+
+.confirm-thumb-name {
+  user-select: text;
+  word-break: break-all;
+}
+
+#confirm-nophoto-btn {
+  align-self: flex-start;
+}
+
+/* ── actions ──────────────────────────────────────────────────────────── */
+
+.confirm-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
+}
+
+.confirm-actions-spacer {
+  flex: 1;
+}
+
+.confirm-btn {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: var(--hover-wash);
+  color: var(--fg);
+  border-color: var(--border-hover);
+}
+
+.confirm-btn:active:not(:disabled) {
+  background: var(--surface-0);
+}
+
+/* One obvious primary action — same language as #composer-submit. */
+.confirm-btn-primary {
+  border-color: var(--accent-dim);
+  background: #4488ff22;
+  color: var(--fg);
+}
+
+.confirm-btn-primary:hover:not(:disabled) {
+  background: #4488ff33;
+  border-color: var(--accent-hover);
+}
+
+.confirm-btn-quiet {
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.confirm-link {
+  padding: var(--s1) 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-inline);
+  background: none;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.confirm-link:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.confirm-btn:focus-visible,
+.confirm-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Standing rule 1: a disabled control is COLOURED, never faded — fading an
+   already-low-contrast label makes it invisible. opacity stays 1. */
+.confirm-btn:disabled,
+.confirm-link:disabled {
+  opacity: 1;
+  color: var(--fg-disabled);
+  background: var(--surface-1);
+  border-color: var(--border-hairline);
+  cursor: not-allowed;
+}
+
+.confirm-link:disabled {
+  background: none;
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .confirm-modal {
+    width: 96vw;
+  }
+
+  .confirm-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}

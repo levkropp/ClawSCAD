@@ -1,0 +1,232 @@
+/* style-presets.css — owned exclusively by P3 (presets). New tokens go here
+   under a :root { } block, next to their consumers.
+
+   Contrast — WCAG relative-luminance ratios computed directly against the
+   ACTUAL background each token sits on in this file (not assumed from
+   style.css's own comments, which audit these tokens against --surface-1,
+   a slightly darker surface than what most of these controls use):
+     --fg-muted    (#7f7fae) on --surface-2   (#0d0d1a) = 5.09:1 — unpressed chip text, modifier label
+     --fg-secondary(#9a9ac4) on --surface-2   (#0d0d1a) = 7.15:1 — recipe-strip meta text
+     --fg-secondary(#9a9ac4) on --preset-chip-on-bg (#1a2540) = 5.64:1 — pressed chip text
+     --accent-label(#7f9fdd) on --surface-2   (#0d0d1a) = 7.26:1 — recipe-strip title / uppercase chrome
+     --accent-label(#7f9fdd) on --preset-chip-on-bg (#1a2540) = 5.72:1 — pressed modifier chip text
+     --warn        (#f0a63c) on --surface-2   (#0d0d1a) = 9.38:1 — recipe-strip conflict notes
+   All six pairings above are >= 5:1, comfortably past AA's 4.5:1 floor for
+   normal text (three exceed AAA's 7:1). The one token that did NOT clear
+   4.5:1 in this file's actual use — --fg-faint at 3.79:1 on --surface-2 —
+   was swapped for --fg-muted; see the comment on .preset-modifier-label. */
+
+:root {
+  --preset-chip-on-bg: #1a2540;
+  --preset-chip-sep: var(--border-hairline);
+}
+
+.presets-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* ── chip row ─────────────────────────────────────────────────────────── */
+
+#preset-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+}
+
+/* The hairline separating the exclusive fidelity pair from the stacking
+   purpose group (master plan §1.2's canonical chip row). */
+.preset-chip-sep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 20px;
+  background: var(--preset-chip-sep);
+  margin: 0 var(--s1);
+}
+
+/* No chip is ever `disabled` — exclusivity (fidelity pair) resolves by
+   auto-deselecting the other member, and refusal (Structural/Fits hardware
+   vs the generated track) resolves via the refusal card below, never by
+   removing a chip from the tab order or fading it (master plan §1.3/§1.4). */
+.preset-chip {
+  padding: 5px var(--s2);
+  border-radius: var(--r-control);
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.preset-chip:hover {
+  background: var(--hover-wash);
+  color: var(--fg);
+  border-color: var(--border-hover);
+}
+
+.preset-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Pressed — colour + background, never colour alone (aria-pressed carries
+   the actual state; the visual is a reinforcement, not the only signal). */
+.preset-chip[aria-pressed="true"] {
+  color: var(--fg-secondary);
+  background: var(--preset-chip-on-bg);
+  border-color: var(--accent-dim);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ── exclusivity status line ─────────────────────────────────────────── */
+
+#preset-status {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--accent-label);
+}
+
+#preset-status[hidden] {
+  display: none;
+}
+
+/* ── recipe strip (ux-spec §2.5) ─────────────────────────────────────── */
+/* Left bar matches .cp-node.active's language for "this is in force". */
+
+#preset-recipe-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s2) var(--s3);
+  background: var(--surface-1);
+  border-radius: var(--r-inline);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+#preset-recipe-strip[hidden] {
+  display: none;
+}
+
+.preset-recipe-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+}
+
+.preset-recipe-meta {
+  font-size: var(--text-meta);
+  color: var(--fg-secondary);
+}
+
+.preset-recipe-note {
+  font-size: var(--text-meta);
+  color: var(--warn);
+}
+
+/* ── refusal card (master plan §1.4) ─────────────────────────────────── */
+/* Same visual register as the composer's setup card (style-composer.css) —
+   additive framing, never a replacement for the prompt/submit surface. */
+
+#preset-refusal-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface-2);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-panel);
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+
+#preset-refusal-card[hidden] {
+  display: none;
+}
+
+#preset-refusal-card p {
+  margin: 0;
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
+  line-height: 1.4;
+}
+
+.preset-refusal-actions {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* ── modifier row (material / printer, §5.3) ─────────────────────────── */
+/* Visually quieter than the intent chip row — smaller text, no separators,
+   informational (no direct CLI flag exists for either axis yet). */
+
+#preset-modifier-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.preset-modifier-group {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.preset-modifier-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  /* --fg-faint measures 3.79:1 against --surface-2 — under AA's 4.5:1 for
+     normal text. This label ("Printer") identifies what the buttons next to
+     it control, which isn't purely decorative, so it gets --fg-muted
+     (5.09:1 against --surface-2 — see the contrast note at the top of this
+     file) instead. */
+  color: var(--fg-muted);
+}
+
+.preset-modifier-chip {
+  padding: 2px var(--s2);
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-hairline);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.preset-modifier-chip:hover {
+  color: var(--fg);
+}
+
+.preset-modifier-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.preset-modifier-chip[aria-pressed="true"] {
+  color: var(--accent-label);
+  border-color: var(--accent-dim);
+  background: var(--hover-wash);
+}
+
+/* ── load error ───────────────────────────────────────────────────────── */
+
+#preset-load-error {
+  font-size: var(--text-meta);
+  color: var(--warn);
+}
+
+#preset-load-error[hidden] {
+  display: none;
+}

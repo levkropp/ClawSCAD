@@ -4,6 +4,7 @@ const { _electron: electron } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { openWorkbench } = require('./helpers');
 
 const APP_PATH = path.join(__dirname, '..');
 const TEST_WORKSPACE = path.join(os.tmpdir(), 'clawscad-test-' + Date.now());
@@ -25,6 +26,7 @@ test.beforeEach(async () => {
   page = await electronApp.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1000);
+  await openWorkbench(page);
 });
 
 test.afterEach(async () => {
@@ -32,7 +34,20 @@ test.afterEach(async () => {
 });
 
 test.afterAll(async () => {
-  fs.rmSync(TEST_WORKSPACE, { recursive: true, force: true });
+  // On Windows the renderer child (openscad) can still hold a handle on the
+  // temp workspace for a moment after the app closes, so a bare rmSync throws
+  // EBUSY and fails an otherwise-passing spec. Retry, and never let cleanup
+  // alone turn the run red.
+  try {
+    fs.rmSync(TEST_WORKSPACE, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 250,
+    });
+  } catch (err) {
+    console.warn(`test workspace cleanup left ${TEST_WORKSPACE}: ${err.code}`);
+  }
 });
 
 // ── Window & Layout Tests ────────────────────────────────────────────
@@ -82,8 +97,12 @@ test.describe('Window & Layout', () => {
   });
 
   test('workspace path is shown in header', async () => {
+    // prettyPath now middle-ellipsises a long path (the old regex only ever
+    // collapsed /home/x and /root, so every Windows path ate the header), so
+    // the full path lives in the title while the label stays identifying.
     const pathEl = page.locator('#workspace-path');
-    await expect(pathEl).toContainText(TEST_WORKSPACE);
+    await expect(pathEl).toContainText(path.basename(TEST_WORKSPACE));
+    await expect(pathEl).toHaveAttribute('title', TEST_WORKSPACE);
   });
 });
 
@@ -107,9 +126,10 @@ test.describe('ClawSCAD Menu', () => {
     const count = await items.count();
     expect(count).toBeGreaterThanOrEqual(10);
 
-    // Use actual data-action values from index.html
+    // Actual data-action values from index.html
     await expect(page.locator('[data-action="new-project"]')).toBeVisible();
     await expect(page.locator('[data-action="open-workspace"]')).toBeVisible();
+    await expect(page.locator('[data-action="split-viewport"]')).toBeVisible();
     await expect(page.locator('[data-action="screenshot"]')).toBeVisible();
     await expect(page.locator('[data-action="toggle-editor"]')).toBeVisible();
     await expect(page.locator('[data-action="devtools"]')).toBeVisible();
@@ -119,7 +139,9 @@ test.describe('ClawSCAD Menu', () => {
     await page.locator('#app-menu-btn').click();
     const menu = page.locator('#app-menu');
     await expect(menu).not.toHaveClass(/hidden/);
-    // Click the status bar — always below the open menu, never covered by it
+    // Click the status bar — always below the open menu, never covered by it.
+    // Don't use a fixed viewport point: the dropdown overlays the viewport's
+    // top-left, so a hardcoded (200,200) is intercepted by the menu itself.
     await page.locator('#status-bar').click();
     await expect(menu).toHaveClass(/hidden/);
   });
@@ -137,7 +159,9 @@ test.describe('ClawSCAD Menu', () => {
 
 test.describe('Viewport Toolbar', () => {
   test('toolbar buttons are injected into left/right containers', async () => {
-    // Buttons are dynamically added by renderer.js into #viewport-toolbar-left/right
+    // Buttons are dynamically added by renderer.js into #viewport-toolbar-left/right,
+    // and the containers only become visible once a model is loaded — assert
+    // attachment, not visibility.
     const left = page.locator('#viewport-toolbar-left');
     const right = page.locator('#viewport-toolbar-right');
     await expect(left).toBeAttached();

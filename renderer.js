@@ -6,6 +6,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+// bus.js has no side effects at import time (plain object + function decls) —
+// safe to import here despite ESM import hoisting. See renderer/bus.js.
+import { ctx, notifyCheckpointsChanged, notifyPipelineEvent } from './renderer/bus.js';
 
 // ── Toast System ────────────────────────────────────────────────────────
 
@@ -151,27 +154,54 @@ const editorEditToggle = document.getElementById('editor-edit-toggle');
 const editorSaveBtn = document.getElementById('editor-save-btn');
 const editorFilename = document.getElementById('editor-filename');
 
+// A disclosure control has to say which state it's in, for the same reason it
+// has to look like one. setExpanded keeps the class and the ARIA in step.
+function setExpanded(panel, toggle, collapsed) {
+  panel.classList.toggle('collapsed', collapsed);
+  if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
+}
+
 editorToggle.addEventListener('click', () => {
-  editorPanel.classList.toggle('collapsed');
+  setExpanded(editorPanel, editorToggle, !editorPanel.classList.contains('collapsed'));
 });
 
 // Checkpoint panel toggle
-document.getElementById('checkpoint-toggle').addEventListener('click', () => {
-  document.getElementById('checkpoint-panel').classList.toggle('collapsed');
+const checkpointPanel = document.getElementById('checkpoint-panel');
+const checkpointToggle = document.getElementById('checkpoint-toggle');
+checkpointToggle.addEventListener('click', () => {
+  setExpanded(checkpointPanel, checkpointToggle, !checkpointPanel.classList.contains('collapsed'));
 });
 
 editorEditToggle.addEventListener('click', () => {
   editorReadOnly = !editorReadOnly;
   monacoEditor.updateOptions({ readOnly: editorReadOnly });
   editorEditToggle.classList.toggle('active', !editorReadOnly);
+  editorEditToggle.setAttribute('aria-pressed', String(!editorReadOnly));
   editorSaveBtn.classList.toggle('hidden', editorReadOnly);
 });
 
 editorSaveBtn.addEventListener('click', async () => {
   if (!currentEditorFile || editorReadOnly) return;
   const content = monacoEditor.getValue();
+
+  // Checkpoints are immutable. Saving over one destroys history that has no
+  // undo, so a tracked file saves to a NEW checkpoint instead — the watcher
+  // adopts it as a child. Untracked scratch files save in place as before.
+  const tracked = await window.api.isTrackedCheckpoint(currentEditorFile);
+  if (tracked) {
+    const res = await window.api.saveAsCheckpoint(currentEditorFile, content);
+    if (res && res.ok) {
+      editorSavedValue = content;
+      showToast(`Saved as new checkpoint: ${res.file}`, 'success');
+    } else if (!res || !res.canceled) {
+      showToast('Save failed', 'error');
+    }
+    return;
+  }
+
   const ok = await window.api.saveFile(currentEditorFile, content);
   if (ok) {
+    editorSavedValue = content;
     showToast('File saved', 'success');
   } else {
     showToast('Save failed', 'error');
@@ -179,14 +209,40 @@ editorSaveBtn.addEventListener('click', async () => {
 });
 
 // Receive file content from main process
-window.api.onFileContent((data) => {
+const editorImmutableHint = document.getElementById('editor-immutable-hint');
+let editorSavedValue = '';
+
+function editorIsDirty() {
+  return !editorReadOnly && monacoEditor.getValue() !== editorSavedValue;
+}
+
+window.api.onFileContent(async (data) => {
+  // Selecting another checkpoint used to call setValue() with no dirty check,
+  // silently discarding whatever was typed. W0-4 guarded the write side; this
+  // is the other half.
+  if (editorIsDirty() && currentEditorFile && currentEditorFile !== data.path) {
+    const keep = !window.confirm(
+      `You have unsaved edits to ${currentEditorFile.split(/[\\/]/).pop()}.\n\n` +
+        'OK to discard them and open the checkpoint you clicked, or Cancel to keep editing.'
+    );
+    if (keep) {
+      showToast('Kept your unsaved edits — the viewport switched, the editor did not', 'info');
+      return;
+    }
+  }
+
   currentEditorFile = data.path;
   editorFilename.textContent = data.name;
   monacoEditor.setValue(data.content);
+  editorSavedValue = data.content;
   monacoEditor.revealLine(1);
   // Clear any previous error markers
   const model = monacoEditor.getModel();
   if (model) monaco.editor.setModelMarkers(model, 'openscad', []);
+
+  // Say the rule at the place where the rule can be broken.
+  const tracked = await window.api.isTrackedCheckpoint(data.path);
+  editorImmutableHint.classList.toggle('hidden', !tracked);
 });
 
 // ── Terminal Setup ──────────────────────────────────────────────────────
@@ -430,8 +486,10 @@ function showCachedModel(checkpointId) {
   modelBounds = cached.bounds;
   currentCheckpointId = checkpointId;
 
-  // Apply current display state
+  // Apply current display state. Undim explicitly: a cached model that was
+  // on screen when a re-render started would otherwise come back at 18%.
   currentMesh.visible = true;
+  setModelDimmed(false);
   if (currentEdges) currentEdges.visible = edgesVisible;
   modelMaterial.wireframe = wireframeMode;
 
@@ -889,6 +947,8 @@ function buildToolbar() {
     el.id = btn.id;
     el.className = (btn.className || 'toolbar-btn') + (btn.active ? ' active' : '');
     el.title = btn.title;
+    el.setAttribute('aria-label', btn.title);
+    if (btn.toggle) el.setAttribute('aria-pressed', String(!!btn.active));
     el.innerHTML = btn.icon;
     el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -903,12 +963,17 @@ function buildToolbar() {
 }
 
 function updateToolbarState() {
-  const wire = document.getElementById('btn-wire');
-  const edges = document.getElementById('btn-edges');
-  const ortho = document.getElementById('btn-ortho');
-  if (wire) wire.classList.toggle('active', wireframeMode);
-  if (edges) edges.classList.toggle('active', edgesVisible);
-  if (ortho) ortho.classList.toggle('active', isOrtho);
+  // aria-pressed moves with the class, not separately from it — a toggle that
+  // only says "active" in CSS is invisible to anything but sighted mouse use.
+  const set = (id, on) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-pressed', String(on));
+  };
+  set('btn-wire', wireframeMode);
+  set('btn-edges', edgesVisible);
+  set('btn-ortho', isOrtho);
 }
 
 // View preset buttons
@@ -946,10 +1011,42 @@ const renderTimeEl = document.getElementById('render-time');
 let renderTimer = null;
 let renderStartTime = 0;
 
-function showRenderOverlay(filename) {
-  // Remove current model from scene during render (cached objects stay in memory)
-  removeCurrentFromScene();
+// Keep the previous geometry in the scene, dimmed, while a re-render runs.
+// Blanking the viewport threw away the only reference you have for judging
+// whether the new version is better — and the fault card that may follow is
+// anchored, not a scrim, precisely so that stays true (W2-1 ↔ W4-1).
+function setModelDimmed(dim) {
+  const apply = (m) => {
+    if (!m || !m.material) return;
+    if (dim) {
+      if (m.userData._preDimOpacity === undefined) {
+        m.userData._preDimOpacity = m.material.opacity;
+        m.userData._preDimTransparent = m.material.transparent;
+      }
+      m.material.transparent = true;
+      m.material.opacity = 0.18;
+    } else if (m.userData._preDimOpacity !== undefined) {
+      m.material.opacity = m.userData._preDimOpacity;
+      m.material.transparent = m.userData._preDimTransparent;
+      delete m.userData._preDimOpacity;
+      delete m.userData._preDimTransparent;
+    }
+  };
+  if (!currentMesh) return;
+  if (currentMesh.isMesh) apply(currentMesh);
+  else currentMesh.traverse((c) => { if (c.isMesh) apply(c); });
+  if (currentEdges) currentEdges.visible = dim ? false : edgesVisible;
+}
 
+function showRenderOverlay(filename) {
+  deselectPart();
+  setModelDimmed(true);
+
+  // A new render supersedes whatever failure was on screen.
+  renderFaultEl.hidden = true;
+  renderOverlay.classList.remove('is-error');
+  renderOverlay.querySelector('.spinner').style.display = '';
+  renderOverlay.querySelector('.overlay-bar').style.display = '';
   renderOverlay.classList.add('visible');
   renderOverlay.querySelector('.overlay-text').textContent =
     `Rendering ${filename || ''}...`;
@@ -961,29 +1058,96 @@ function showRenderOverlay(filename) {
 
 function hideRenderOverlay() {
   renderOverlay.classList.remove('visible');
+  setModelDimmed(false);
   if (renderTimer) {
     clearInterval(renderTimer);
     renderTimer = null;
   }
 }
 
-function showRenderError(error) {
+const renderFaultEl = document.getElementById('render-fault');
+const renderFaultDetailEl = document.getElementById('render-fault-detail');
+
+// Headline per fault class. "Render Failed" for all three was actively
+// misleading: a missing binary and a bad polygon are not the same problem and
+// do not have the same fix.
+let lastFailedFile = null;
+
+const FAULT_HEADLINES = {
+  model: 'Render failed',
+  timeout: 'Render timed out after 2:00 — the model may just be heavy',
+  environment: 'OpenSCAD could not be started',
+};
+
+const FAULT_CLASSES = ['fault-model', 'fault-timeout', 'fault-environment'];
+const faultOpenErrorsBtn = document.getElementById('render-fault-open-errors');
+const faultAskBtn = document.getElementById('render-fault-ask');
+const faultLocateBtn = document.getElementById('render-fault-locate');
+
+function showRenderError(error, fault = 'model') {
   if (renderTimer) {
     clearInterval(renderTimer);
     renderTimer = null;
   }
-  renderOverlay.querySelector('.overlay-text').textContent = 'Render Failed';
-  renderTimeEl.textContent = error.substring(0, 120);
+  // The model behind the card stays visible and orbitable, so undim it.
+  setModelDimmed(false);
+  renderOverlay.classList.add('visible', 'is-error');
+  renderOverlay.classList.remove(...FAULT_CLASSES);
+  renderOverlay.classList.add(`fault-${fault}`);
+  // Only a genuine model rejection has a RENDER_ERRORS.md or anything Claude
+  // could act on; only an environment fault can be cured by finding a binary.
+  faultOpenErrorsBtn.classList.toggle('hidden', fault !== 'model');
+  faultAskBtn.classList.toggle('hidden', fault !== 'model');
+  faultLocateBtn.classList.toggle('hidden', fault !== 'environment');
+  renderOverlay.querySelector('.overlay-text').textContent =
+    FAULT_HEADLINES[fault] || FAULT_HEADLINES.model;
+  // #render-time is 24px display type for the elapsed clock — prose does not
+  // belong in it. That is where the old code put a 120-char error slice.
+  renderTimeEl.textContent = '';
   renderOverlay.querySelector('.spinner').style.display = 'none';
   renderOverlay.querySelector('.overlay-bar').style.display = 'none';
-  // Auto-hide after 5s
-  setTimeout(() => {
-    hideRenderOverlay();
-    // Restore spinner for next render
-    renderOverlay.querySelector('.spinner').style.display = '';
-    renderOverlay.querySelector('.overlay-bar').style.display = '';
-  }, 5000);
+  // Full text, kept until dismissed — no truncation, no auto-hide.
+  renderFaultDetailEl.textContent = error;
+  renderFaultEl.hidden = false;
 }
+
+function dismissRenderFault() {
+  renderFaultEl.hidden = true;
+  renderOverlay.classList.remove('is-error', ...FAULT_CLASSES);
+  renderOverlay.querySelector('.spinner').style.display = '';
+  renderOverlay.querySelector('.overlay-bar').style.display = '';
+  hideRenderOverlay();
+}
+
+document.getElementById('render-fault-dismiss').addEventListener('click', dismissRenderFault);
+document.getElementById('render-fault-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText(renderFaultDetailEl.textContent || '').then(
+    () => showToast('Error copied', 'success'),
+    () => showToast('Could not copy', 'error')
+  );
+});
+
+faultOpenErrorsBtn.addEventListener('click', async () => {
+  const ok = await window.api.openRenderErrors();
+  if (!ok) showToast('No RENDER_ERRORS.md in this workspace', 'info');
+});
+
+faultAskBtn.addEventListener('click', async () => {
+  const file = lastFailedFile ? ` of ${lastFailedFile}` : '';
+  const sent = await window.api.sendClaudeNudge(
+    `The render${file} failed. Read RENDER_ERRORS.md for details and create a fixed version.`
+  );
+  showToast(sent ? 'Asked Claude to fix it' : 'No Claude terminal to ask', sent ? 'success' : 'error');
+});
+
+faultLocateBtn.addEventListener('click', async () => {
+  const res = await window.api.locateOpenSCAD();
+  if (res && res.binary) {
+    showToast(`Using ${res.binary} — ${res.note}`, 'success');
+    dismissRenderFault();
+    window.api.forceRender();
+  }
+});
 
 function updateRenderTimer() {
   const elapsed = Math.floor((Date.now() - renderStartTime) / 1000);
@@ -1004,8 +1168,14 @@ window.api.onRenderComplete((data) => {
 });
 
 window.api.onRenderError((data) => {
-  showRenderError(data.error);
-  showToast(`Render failed: ${data.file}`, 'error');
+  lastFailedFile = data.file || null;
+  showRenderError(data.error, data.fault);
+  showToast(
+    data.fault === 'timeout'
+      ? `Render timed out: ${data.file}`
+      : `Render failed: ${data.file}`,
+    'error'
+  );
 
   // Set Monaco error markers if editor has the file loaded
   if (data.errors && data.errors.length > 0) {
@@ -1028,6 +1198,173 @@ window.api.onRenderError((data) => {
 
 window.api.onRenderWarning((data) => {
   showToast(`Warning: ${data.file}`, 'info');
+});
+
+// A setup fault, not a model fault. Say what is actually wrong and what would
+// fix it, and never phrase it as "your model failed".
+window.api.onRenderEnvError((data) => {
+  showRenderError(
+    `ClawSCAD could not run OpenSCAD.\n\n` +
+      `Tried:  ${data.binary}\n` +
+      `Error:  ${data.code} — ${data.error}\n\n` +
+      `Your model was never compiled, so nothing about it is known to be wrong.\n` +
+      `Fix the install, then render again:\n` +
+      `  • run "npm run download-openscad" to fetch the bundled copy, or\n` +
+      `  • set the OPENSCAD_BINARY environment variable to a full path, or\n` +
+      `  • put openscad on your PATH.`,
+    'environment'
+  );
+  showToast('OpenSCAD not found', 'error');
+});
+
+// ── Environment banners ─────────────────────────────────────────────────
+// One strip, one banner at a time, priority OpenSCAD > Claude CLI > claw-gen.
+// Two severities: OpenSCAD absent stops everything; the other two disable one
+// feature each, and painting all three the same colour would say otherwise.
+
+const envBannersEl = document.getElementById('env-banners');
+let envDismissed = new Set();
+
+function renderEnvBanner(env) {
+  envBannersEl.innerHTML = '';
+  if (!env) return;
+
+  const candidates = [];
+  if (!env.openscad.resolved) {
+    candidates.push(
+      env.openscad.bundledMissing
+        ? {
+            key: 'openscad-bundled',
+            severity: 'blocking',
+            label: 'OpenSCAD',
+            text: "Bundled OpenSCAD hasn't been downloaded in this checkout — nothing can render until it is.",
+            actions: [
+              { text: 'Locate a binary…', run: locateOpenSCADFromBanner },
+            ],
+          }
+        : {
+            key: 'openscad-missing',
+            severity: 'blocking',
+            label: 'OpenSCAD',
+            text: "OpenSCAD not found. ClawSCAD normally ships one — this build didn't.",
+            actions: [{ text: 'Locate OpenSCAD…', run: locateOpenSCADFromBanner }],
+          }
+    );
+  }
+  if (!env.claude.binary) {
+    candidates.push({
+      key: 'claude-missing',
+      severity: 'degraded',
+      label: 'Claude',
+      text: 'Claude Code CLI not found — the pane on the right is a plain shell.',
+      actions: [],
+    });
+  }
+  if (!env.clawGen.binary) {
+    candidates.push({
+      key: 'clawgen-missing',
+      severity: 'degraded',
+      label: 'Generate',
+      text: 'claw-gen not found — the Generate panel is unavailable. Everything else works.',
+      actions: [],
+    });
+  }
+
+  const banner = candidates.find((c) => !envDismissed.has(c.key));
+  if (!banner) return;
+
+  const el = document.createElement('div');
+  el.className = `env-banner ${banner.severity}`;
+  el.dataset.key = banner.key;
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = banner.label;
+  el.appendChild(label);
+
+  const text = document.createElement('span');
+  text.textContent = banner.text;
+  el.appendChild(text);
+
+  const spacer = document.createElement('span');
+  spacer.className = 'spacer';
+  el.appendChild(spacer);
+
+  for (const action of banner.actions) {
+    const btn = document.createElement('button');
+    btn.className = 'small-btn';
+    btn.textContent = action.text;
+    btn.addEventListener('click', action.run);
+    el.appendChild(btn);
+  }
+
+  const dismiss = document.createElement('button');
+  dismiss.className = 'small-btn';
+  dismiss.textContent = 'Dismiss';
+  dismiss.addEventListener('click', () => {
+    envDismissed.add(banner.key);
+    refreshEnv();
+  });
+  el.appendChild(dismiss);
+
+  envBannersEl.appendChild(el);
+}
+
+async function locateOpenSCADFromBanner() {
+  const res = await window.api.locateOpenSCAD();
+  if (res && res.binary) {
+    showToast(`Using ${res.binary} — ${res.note}`, 'success');
+    refreshEnv();
+  }
+}
+
+async function refreshEnv() {
+  renderEnvBanner(await window.api.getEnvStatus());
+}
+
+window.api.onEnvStatus((env) => renderEnvBanner(env));
+refreshEnv();
+
+// ── Claude nudge card ───────────────────────────────────────────────────
+
+const nudgeCard = document.getElementById('nudge-card');
+const nudgeTextEl = nudgeCard.querySelector('.nudge-text');
+let pendingNudge = null;
+
+window.api.onClaudeNudge((data) => {
+  pendingNudge = data.message;
+  nudgeTextEl.textContent = data.message;
+  nudgeCard.classList.remove('hidden');
+});
+
+document.getElementById('nudge-send').addEventListener('click', async () => {
+  if (!pendingNudge) return;
+  const sent = await window.api.sendClaudeNudge(pendingNudge);
+  showToast(sent ? 'Sent to Claude' : 'No Claude terminal to send to', sent ? 'success' : 'error');
+  nudgeCard.classList.add('hidden');
+  pendingNudge = null;
+});
+
+document.getElementById('nudge-dismiss').addEventListener('click', () => {
+  nudgeCard.classList.add('hidden');
+  pendingNudge = null;
+});
+
+// ── Terminal honesty ────────────────────────────────────────────────────
+
+const terminalLabelEl = document.getElementById('terminal-label');
+const restartClaudeBtn = document.getElementById('restart-claude-btn');
+
+window.api.onTerminalLabel(({ kind, binary }) => {
+  const isClaude = kind === 'claude';
+  terminalLabelEl.textContent = isClaude ? 'Claude Code' : 'Shell';
+  terminalLabelEl.title = binary || '';
+  restartClaudeBtn.classList.toggle('hidden', isClaude);
+});
+
+restartClaudeBtn.addEventListener('click', async () => {
+  const res = await window.api.restartTerminal();
+  showToast(res && res.kind === 'claude' ? 'Claude restarted' : 'Still no Claude CLI on PATH', 'info');
 });
 
 window.api.onModelUpdate((update) => {
@@ -1053,13 +1390,60 @@ let checkpointState = { checkpoints: {}, active: null };
 const collapsedNodes = new Set(); // checkpoint IDs whose children are hidden
 let contextMenuTargetId = null;
 
+// Descriptions default ON: the .scad's first-line comment is what makes a row
+// mean something, and it was reachable only by hovering.
+const descToggle = document.getElementById('cp-desc-toggle');
+let showDescriptions = localStorage.getItem('clawscad-cp-desc') !== 'off';
+
+descToggle.classList.toggle('active', showDescriptions);
+descToggle.setAttribute('aria-pressed', String(showDescriptions));
+descToggle.addEventListener('click', () => {
+  showDescriptions = !showDescriptions;
+  localStorage.setItem('clawscad-cp-desc', showDescriptions ? 'on' : 'off');
+  descToggle.classList.toggle('active', showDescriptions);
+  descToggle.setAttribute('aria-pressed', String(showDescriptions));
+  renderTree();
+});
+
+function focusRow(id) {
+  const row = treeEl.querySelector(`.cp-node[data-id="${id}"]`);
+  if (row) row.focus();
+}
+
+// The branching rule — a new file's parent is whatever is active the moment it
+// lands — was visible only as a 4-second toast. This strip is where it lives.
+const branchPointEl = document.getElementById('cp-branchpoint');
+
+function renderBranchPoint() {
+  const { checkpoints, active } = checkpointState;
+  const cp = active && checkpoints[active];
+  if (!cp) {
+    branchPointEl.classList.add('hidden');
+    return;
+  }
+  branchPointEl.classList.remove('hidden');
+  branchPointEl.innerHTML = '';
+  branchPointEl.append(
+    document.createTextNode('Next change branches from '),
+    Object.assign(document.createElement('strong'), { textContent: cp.label || cp.file }),
+    document.createTextNode(' · '),
+    Object.assign(document.createElement('code'), { textContent: 'active.scad' }),
+    document.createTextNode(' points here')
+  );
+}
+
 function renderTree() {
   const { checkpoints, active } = checkpointState;
   treeEl.innerHTML = '';
 
   if (Object.keys(checkpoints).length === 0) {
+    // The empty state is the only place the app can teach its core idea, so it
+    // says what a checkpoint IS rather than just that there aren't any.
     treeEl.innerHTML =
-      '<div class="cp-empty">No checkpoints yet.<br>Ask Claude to create a model!</div>';
+      '<div class="cp-empty"><strong>No checkpoints yet.</strong>' +
+      'Every file Claude writes becomes a permanent checkpoint here. ' +
+      'Nothing is ever overwritten — changes always create a new one, ' +
+      'so you can always come back.</div>';
     return;
   }
 
@@ -1087,9 +1471,16 @@ function renderTree() {
     const isRoot = depth === 0;
 
     const node = document.createElement('div');
-    node.className = 'cp-node' + (isActive ? ' active' : '');
+    node.className = 'cp-node' + (isActive ? ' active' : '') + (showDescriptions ? ' with-desc' : '');
     node.dataset.id = id;
     node.dataset.depth = depth;
+    node.setAttribute('role', 'treeitem');
+    node.setAttribute('aria-level', String(depth + 1));
+    node.setAttribute('aria-selected', String(isActive));
+    node.tabIndex = isActive ? 0 : -1;
+    // Drives the diamond dot + GEN badge: a mesh-derived checkpoint is a
+    // starting point to branch from, not a finished part.
+    if (cp.kind) node.dataset.kind = cp.kind;
 
     // Tree prefix with box-drawing characters
     if (depth > 0) {
@@ -1112,6 +1503,35 @@ function renderTree() {
     label.className = 'cp-label';
     label.textContent = cp.label || cp.file;
     node.appendChild(label);
+
+    // A node can carry both badges: a generated sculpt written while the app
+    // was closed is generated AND discovered.
+    const badges = document.createElement('span');
+    badges.className = 'cp-badges';
+    if (cp.kind === 'generated') {
+      const badge = document.createElement('span');
+      badge.className = 'cp-badge';
+      badge.textContent = 'GEN';
+      badge.title = 'Generated sculpt — branch to add features, don’t edit.';
+      badges.appendChild(badge);
+    }
+    if (cp.discovered) {
+      const badge = document.createElement('span');
+      badge.className = 'cp-badge cp-badge-found';
+      badge.textContent = 'FOUND';
+      badge.title = 'Found on disk and adopted into history — created while ClawSCAD was closed';
+      badges.appendChild(badge);
+    }
+    node.appendChild(badges);
+
+    // The first-line // comment is the single most informative string in the
+    // app and was hover-only. Second line, on by default.
+    if (cp.description) {
+      const desc = document.createElement('span');
+      desc.className = 'cp-desc';
+      desc.textContent = cp.description;
+      node.appendChild(desc);
+    }
 
     const time = document.createElement('span');
     time.className = 'cp-time';
@@ -1154,17 +1574,18 @@ function renderTree() {
       });
     });
 
-    // Tooltip on hover
-    node.addEventListener('mouseenter', (e) => {
-      const desc = cp.description || '';
+    // Tooltip on hover AND on focus \u2014 otherwise keyboard tree navigation can
+    // never reach the same text a mouse can.
+    const showTooltip = () => {
       const meta = [cp.file];
       if (cp.sessionId) meta.push('session linked');
-      const d2 = new Date(cp.created);
-      meta.push(d2.toLocaleString());
+      meta.push(new Date(cp.created).toLocaleString());
 
       const tooltip = document.getElementById('cp-tooltip');
-      document.getElementById('cp-tooltip-desc').textContent = desc;
+      document.getElementById('cp-tooltip-desc').textContent = cp.description || '';
       document.getElementById('cp-tooltip-meta').textContent = meta.join(' \u00b7 ');
+      document.getElementById('cp-tooltip-rule').textContent =
+        cp.kind === 'generated' ? 'Generated sculpt \u2014 branch to add features, don\u2019t edit.' : '';
       tooltip.classList.remove('hidden');
 
       const rect = node.getBoundingClientRect();
@@ -1179,18 +1600,51 @@ function renderTree() {
       if (tr.bottom > window.innerHeight - 8) {
         tooltip.style.top = window.innerHeight - tr.height - 8 + 'px';
       }
-    });
+    };
+    const hideTooltip = () => document.getElementById('cp-tooltip').classList.add('hidden');
 
-    node.addEventListener('mouseleave', () => {
-      document.getElementById('cp-tooltip').classList.add('hidden');
+    node.addEventListener('mouseenter', showTooltip);
+    node.addEventListener('focus', showTooltip);
+    node.addEventListener('mouseleave', hideTooltip);
+    node.addEventListener('blur', hideTooltip);
+
+    // Rows were divs with a click handler and nothing else \u2014 unreachable
+    // without a mouse in a panel whose whole job is navigation.
+    node.addEventListener('keydown', (e) => {
+      const rows = Array.from(treeEl.querySelectorAll('.cp-node'));
+      const i = rows.indexOf(node);
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        window.api.selectCheckpoint(id);
+      } else if (e.key === 'ArrowDown' && i < rows.length - 1) {
+        e.preventDefault();
+        rows[i + 1].focus();
+      } else if (e.key === 'ArrowUp' && i > 0) {
+        e.preventDefault();
+        rows[i - 1].focus();
+      } else if (e.key === 'ArrowRight' && collapsedNodes.has(id)) {
+        e.preventDefault();
+        collapsedNodes.delete(id);
+        renderTree();
+        focusRow(id);
+      } else if (e.key === 'ArrowLeft' && (children[id] || []).length && !collapsedNodes.has(id)) {
+        e.preventDefault();
+        collapsedNodes.add(id);
+        renderTree();
+        focusRow(id);
+      }
     });
 
     // Show collapse indicator if has children
     const hasKids = (children[id] || []).length > 0;
     if (hasKids) {
-      const collapseIcon = document.createElement('span');
-      collapseIcon.className = 'cp-collapse-icon';
-      collapseIcon.textContent = collapsedNodes.has(id) ? '\u25B6' : '\u25BC';
+      const isCollapsed = collapsedNodes.has(id);
+      const collapseIcon = document.createElement('button');
+      collapseIcon.className = 'cp-collapse-icon' + (isCollapsed ? ' is-collapsed' : '');
+      collapseIcon.setAttribute('aria-label', isCollapsed ? 'Expand children' : 'Collapse children');
+      collapseIcon.setAttribute('aria-expanded', String(!isCollapsed));
+      collapseIcon.innerHTML =
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>';
       collapseIcon.addEventListener('click', (e) => {
         e.stopPropagation();
         if (collapsedNodes.has(id)) collapsedNodes.delete(id);
@@ -1260,24 +1714,51 @@ function showRenameInput(cpId, currentName) {
 }
 
 function showDeleteConfirm(cpId, name) {
-  // Show a small inline confirmation bar at the top of the checkpoint tree
+  // "Delete" only removed the registry record; the .scad stayed on disk — and
+  // since reconcileWorkspace() landed, it comes BACK on the next open. Say what
+  // actually happens, and offer the version that doesn't.
+  const file = (checkpointState.checkpoints[cpId] || {}).file || '';
   const bar = document.createElement('div');
   bar.className = 'cp-delete-bar';
-  bar.innerHTML = `
-    <span>Delete "${name}"?</span>
-    <button class="cp-delete-yes">Delete</button>
-    <button class="cp-delete-no">Cancel</button>
-  `;
+
+  const msg = document.createElement('span');
+  msg.className = 'cp-delete-msg';
+  msg.append(
+    document.createTextNode('Remove '),
+    Object.assign(document.createElement('strong'), { textContent: name }),
+    document.createTextNode(
+      ` from history? ${file} stays on disk and will be re-adopted next time this workspace opens.`
+    )
+  );
+  bar.appendChild(msg);
+
+  const mk = (cls, text) => {
+    const b = document.createElement('button');
+    b.className = cls;
+    b.textContent = text;
+    bar.appendChild(b);
+    return b;
+  };
+  const removeBtn = mk('cp-delete-yes', 'Remove');
+  const removeFileBtn = mk('cp-delete-yes', 'Remove and delete the file');
+  const cancelBtn = mk('cp-delete-no', 'Cancel');
+
   treeEl.prepend(bar);
 
-  bar.querySelector('.cp-delete-yes').addEventListener('click', () => {
-    window.api.deleteCheckpoint(cpId);
-    showToast('Checkpoint deleted', 'info');
+  removeBtn.addEventListener('click', async () => {
+    await window.api.deleteCheckpoint(cpId);
+    showToast(`Removed from history — ${file} is still on disk`, 'info');
     bar.remove();
   });
-  bar.querySelector('.cp-delete-no').addEventListener('click', () => {
+  removeFileBtn.addEventListener('click', async () => {
+    const res = await window.api.deleteCheckpoint(cpId, { deleteFile: true });
+    showToast(
+      res && res.fileDeleted ? `Removed and deleted ${file}` : `Removed — but ${file} could not be deleted`,
+      res && res.fileDeleted ? 'info' : 'error'
+    );
     bar.remove();
   });
+  cancelBtn.addEventListener('click', () => bar.remove());
 }
 
 // ── Checkpoint Context Menu Actions ──────────────────────────────────────
@@ -1326,9 +1807,12 @@ cpContextMenu.addEventListener('click', async (e) => {
       }
       break;
     }
+    // Was "Branch from Here" next to a click handler that ran the same code —
+    // two names for one action reads as two actions. One name, and the
+    // branch-point strip now states the consequence permanently.
     case 'branch-here': {
       window.api.selectCheckpoint(id);
-      showToast(`Branching from "${cp?.label || cp?.file}" — next model will be a child`, 'info');
+      showToast(`Continuing from "${cp?.label || cp?.file}" — the next model branches here`, 'info');
       break;
     }
   }
@@ -1357,9 +1841,21 @@ function updateResumeButton() {
   }
 }
 
+// The one file a user is most likely to open by hand, finally named somewhere.
+const activeChip = document.getElementById('active-chip');
+const activeChipFile = document.getElementById('active-chip-file');
+
+function updateActiveChip() {
+  const cp = checkpointState.active && checkpointState.checkpoints[checkpointState.active];
+  activeChip.classList.toggle('hidden', !cp);
+  if (cp) activeChipFile.textContent = `= ${cp.file}`;
+}
+
 window.api.onCheckpointUpdate((state) => {
   checkpointState = state;
   renderTree();
+  renderBranchPoint();
+  updateActiveChip();
   updateResumeButton();
 
   // Refresh viewport 2's tree if open
@@ -1371,12 +1867,484 @@ window.api.onCheckpointUpdate((state) => {
       hideRenderOverlay();
     }
   }
+
+  // Fan out to feature modules. window.api.onCheckpointUpdate has no
+  // unsubscribe, so THIS is the only registration for this channel — every
+  // other module subscribes via ctx.onCheckpointsChanged (renderer/bus.js).
+  notifyCheckpointsChanged(state);
 });
 
 window.api.getCheckpoints().then((state) => {
   checkpointState = state;
   renderTree();
+  renderBranchPoint();
+  updateActiveChip();
 });
+
+// ── Generate Panel ───────────────────────────────────────────────────────
+// Drives the `claw-gen` CLI (contract: docs/generation-pipeline.md) through the
+// main process. The app hardcodes nothing about providers — backend names
+// and availability come only from `pipeline:backends`. When the pipeline is
+// unconfigured the panel shows a single calm line and nothing else.
+
+const genPanel = document.getElementById('gen-panel');
+const genEmpty = document.getElementById('gen-empty');
+const genConfiguredEl = document.getElementById('gen-configured');
+const genPromptEl = document.getElementById('gen-prompt');
+const genCountEl = document.getElementById('gen-count');
+const genBackendsEl = document.getElementById('gen-backends');
+const genGenerateBtn = document.getElementById('gen-generate-btn');
+const genMake3dBtn = document.getElementById('gen-make3d-btn');
+const genCancelBtn = document.getElementById('gen-cancel-btn');
+const genGridEl = document.getElementById('gen-image-grid');
+const genLogEl = document.getElementById('gen-log');
+const genReadmeLink = document.getElementById('gen-readme-link');
+
+const genToggle = document.getElementById('gen-toggle');
+genToggle.addEventListener('click', () => {
+  setExpanded(genPanel, genToggle, !genPanel.classList.contains('collapsed'));
+});
+
+genReadmeLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  window.api.openReadme();
+});
+
+// The locate flow shipped over IPC and no element ever called it — the feature
+// was literally unreachable outside the test suite.
+document.getElementById('gen-locate-btn').addEventListener('click', async () => {
+  const res = await window.api.locatePipelineCli();
+  if (res && res.canceled) return;
+  await refreshGenPipeline();
+  showToast(res && res.resolved ? `Using ${res.resolved}` : 'That file did not resolve as claw-gen', res && res.resolved ? 'success' : 'error');
+});
+
+document.getElementById('gen-retry-btn').addEventListener('click', () => refreshGenPipeline());
+
+let genBackendsList = [];
+let genSelectedKey = null; // `${round}:${index}` of the chosen candidate
+let genJob = null; // job slug learned from the event stream
+let genRunning = false;
+let genPendingStage = null; // drives the Make 3D chain: mesh -> prep -> checkpoint
+
+function genLog(message, isError) {
+  const line = document.createElement('div');
+  line.className = 'gen-log-line' + (isError ? ' gen-log-error' : '');
+  line.textContent = message;
+  genLogEl.appendChild(line);
+  genLogEl.scrollTop = genLogEl.scrollHeight;
+  while (genLogEl.children.length > 200) genLogEl.removeChild(genLogEl.firstChild);
+}
+
+// ── Stage stepper ───────────────────────────────────────────────────────
+// A ~10 minute job used to report nothing at all: #gen-panel ships collapsed,
+// nothing un-collapsed it, and a non-zero exit mid-chain cleared the buttons
+// without saying which stage died.
+
+const GEN_STAGES = ['images', 'mesh', 'prep', 'checkpoint'];
+const genStepperEl = document.getElementById('gen-stepper');
+const genBarEl = document.getElementById('gen-bar');
+const genElapsedEl = document.getElementById('gen-elapsed');
+let genElapsedTimer = null;
+let genStartTime = 0;
+let genStepperEverShown = false;
+
+function genStepEl(stage) {
+  return genStepperEl.querySelector(`.gen-step[data-stage="${stage}"]`);
+}
+
+function genSetStage(stage, state) {
+  const el = genStepEl(stage);
+  if (!el) return;
+  el.classList.remove('done', 'running', 'failed');
+  if (state) el.classList.add(state);
+}
+
+function genResetStepper() {
+  for (const s of GEN_STAGES) genSetStage(s, null);
+}
+
+function genUpdateElapsed() {
+  const elapsed = Math.floor((Date.now() - genStartTime) / 1000);
+  genElapsedEl.textContent = `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`;
+}
+
+function genStartTiming() {
+  genStartTime = Date.now();
+  genUpdateElapsed();
+  if (genElapsedTimer) clearInterval(genElapsedTimer);
+  genElapsedTimer = setInterval(genUpdateElapsed, 1000);
+}
+
+function genStopTiming() {
+  if (genElapsedTimer) {
+    clearInterval(genElapsedTimer);
+    genElapsedTimer = null;
+  }
+}
+
+function genSetRunning(running) {
+  genRunning = running;
+  genGenerateBtn.disabled = running;
+  genMake3dBtn.disabled = running || !genSelectedKey;
+  genCancelBtn.classList.toggle('hidden', !running);
+  genStepperEl.hidden = !running && !genStepperEverShown;
+  genBarEl.hidden = !running;
+  genPanel.setAttribute('aria-busy', String(running));
+  if (running) {
+    genStepperEverShown = true;
+    // Starting a ten-minute job behind a collapsed 26px bar is not a state the
+    // app should be able to be in.
+    if (genPanel.classList.contains('collapsed')) setExpanded(genPanel, genToggle, false);
+    genStepperEl.hidden = false;
+  } else {
+    genStopTiming();
+  }
+}
+
+// Three distinguishable states instead of one. A crashing CLI, a bad config and
+// no install used to look identical, and "busy — try the API backend" (which
+// the pipeline reports under memory pressure) was buried in a checkbox suffix.
+async function refreshGenPipeline() {
+  const result = await window.api.getPipelineBackends();
+  const title = document.getElementById('gen-empty-title');
+  const body = document.getElementById('gen-empty-body');
+  const detail = document.getElementById('gen-empty-detail');
+  const retry = document.getElementById('gen-retry-btn');
+
+  if (!result || !result.configured) {
+    genEmpty.classList.remove('hidden');
+    genConfiguredEl.classList.add('hidden');
+    if (result && result.state === 'cli-error') {
+      title.textContent = 'claw-gen failed to start.';
+      body.textContent = `${result.cli} ran but produced nothing usable.`;
+      detail.textContent = result.detail || '';
+      detail.hidden = !result.detail;
+      retry.classList.remove('hidden');
+    } else {
+      // Keep this substring verbatim — generate-panel.spec.js asserts it.
+      title.textContent = 'No generation pipeline configured.';
+      body.textContent =
+        'Generate turns a sentence into a 3D sculpt (text → images → mesh → checkpoint). It needs the claw-gen CLI.';
+      detail.hidden = true;
+      retry.classList.add('hidden');
+    }
+    return;
+  }
+
+  genEmpty.classList.add('hidden');
+  genConfiguredEl.classList.remove('hidden');
+  genBackendsList = result.backends || [];
+  renderGenBackends();
+
+  if (result.state === 'no-backend') {
+    const reasons = genBackendsList
+      .filter((b) => !b.kind || b.kind === 'image')
+      .map((b) => `${b.name}: ${b.reason || 'unavailable'}`)
+      .join(' · ');
+    genLog(`no image backend available right now — ${reasons}`, true);
+    showToast('No image backend available right now', 'error');
+  }
+}
+
+function renderGenBackends() {
+  genBackendsEl.innerHTML = '';
+  for (const b of genBackendsList) {
+    if (b.kind && b.kind !== 'image') continue;
+    const label = document.createElement('label');
+    label.className = 'gen-backend-check' + (b.ok ? '' : ' unavailable');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = b.name;
+    input.checked = !!b.ok;
+    input.disabled = !b.ok;
+    label.appendChild(input);
+    const span = document.createElement('span');
+    span.textContent = b.name + (b.ok ? '' : ` (${b.reason || 'unavailable'})`);
+    label.appendChild(span);
+    genBackendsEl.appendChild(label);
+  }
+}
+
+function selectedGenBackends() {
+  return Array.from(genBackendsEl.querySelectorAll('input:checked')).map((i) => i.value);
+}
+
+async function addGenCandidate(evt) {
+  const key = `${evt.round}:${evt.index}`;
+  const dataUrl = await window.api.readPipelineImage(evt.path);
+
+  // Rounds are kept, not wiped: a second Generate used to destroy round 1,
+  // including the image you were about to pick.
+  if (!genGridEl.querySelector(`.gen-round-label[data-round="${evt.round}"]`)) {
+    const label = document.createElement('div');
+    label.className = 'gen-round-label';
+    label.dataset.round = String(evt.round);
+    label.textContent = `round ${evt.round}`;
+    genGridEl.appendChild(label);
+  }
+
+  const card = document.createElement('div');
+  card.className = 'gen-candidate';
+  card.dataset.key = key;
+  if (dataUrl) {
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = `Candidate ${evt.index} (${evt.backend})`;
+    card.appendChild(img);
+  }
+  if (evt.backend) {
+    const meta = document.createElement('div');
+    meta.className = 'gen-candidate-meta';
+    meta.textContent = evt.backend;
+    meta.title = `backend ${evt.backend}, round ${evt.round}`;
+    card.appendChild(meta);
+  }
+  card.addEventListener('click', () => {
+    genGridEl.querySelectorAll('.gen-candidate.selected').forEach((el) => el.classList.remove('selected'));
+    card.classList.add('selected');
+    genSelectedKey = key;
+    genMake3dBtn.disabled = genRunning;
+  });
+  genGridEl.appendChild(card);
+}
+
+function setGenScore(evt) {
+  const card = genGridEl.querySelector(`.gen-candidate[data-key="${evt.round}:${evt.index}"]`);
+  if (!card) return;
+  let badge = card.querySelector('.gen-candidate-score');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'gen-candidate-score';
+    card.appendChild(badge);
+  }
+  // A bare number means nothing; say what scale it is on.
+  badge.textContent = `${evt.score}/10`;
+  badge.title = `vision critique score ${evt.score} out of 10`;
+}
+
+/**
+ * One dispatcher for the images stage, used by the Generate button and by the
+ * studio's narrowing loop, so there stays exactly one `pipeline:start` call
+ * site for this action.
+ *
+ * `continueJob` is the whole difference. A fresh run clears the job and the
+ * grid; a continuation keeps both and passes `job`, which makes claw-gen append
+ * the next round (`round_num = args.round or len(rounds) + 1`) instead of
+ * starting over. Without it "More like this" produced a brand-new job whose
+ * candidate keys are `round:index` and therefore COLLIDE with the previous
+ * job's — two different images answering to `.gen-candidate[data-key="1:0"]`,
+ * with Make-3D reaching for whichever the grid happened to hold.
+ */
+async function startImageGeneration({ continueJob = false } = {}) {
+  const text = genPromptEl.value.trim();
+  if (!text) {
+    showToast('Enter a prompt first', 'error');
+    return { error: 'no-prompt' };
+  }
+  const continuing = continueJob && Boolean(genJob);
+  if (!continuing) {
+    genLogEl.innerHTML = '';
+    genJob = null;
+    genResetStepper();
+  }
+  genSelectedKey = null;
+  genPendingStage = null;
+  genSetStage('images', 'running');
+  genStartTiming();
+  genSetRunning(true);
+
+  // -n stays exactly as the user set it in #gen-count — a preset may shape the
+  // image but must not silently overrule a control the user can see.
+  const args = [text, '-n', genCountEl.value, ...presetFlagsFor('images')];
+  const backends = selectedGenBackends();
+  if (backends.length) args.push('--backends', backends.join(','));
+
+  const result = await window.api.startPipeline(
+    continuing ? { action: 'images', args, job: genJob } : { action: 'images', args }
+  );
+  if (result && result.error) {
+    genSetRunning(false);
+    showToast(`Generate failed: ${result.error}`, 'error');
+  }
+  return result;
+}
+
+genGenerateBtn.addEventListener('click', () => startImageGeneration());
+
+// Intent presets contribute CLI flags to the generated track. The presets
+// module cannot inject these itself: these stages are driven from here through
+// `window.api`, which contextBridge freezes, so wrapping the method throws (and
+// wouldn't be observed anyway, since the call sites below read window.api
+// directly). So the flags come the other way — presets-ui.js sets
+// ctx.presetCliFlags and this asks for them at dispatch time. Never let a
+// preset fault break a generate run: on any throw, send the unmodified args.
+function presetFlagsFor(action) {
+  try {
+    const flags = ctx.presetCliFlags && ctx.presetCliFlags(action);
+    return Array.isArray(flags) ? flags.map(String) : [];
+  } catch (err) {
+    console.error('[gen] preset flag lookup failed; running without presets', err);
+    return [];
+  }
+}
+
+genMake3dBtn.addEventListener('click', async () => {
+  if (!genSelectedKey || genRunning) return;
+  const [, index] = genSelectedKey.split(':');
+  genPendingStage = 'mesh';
+  genSetStage('images', 'done');
+  genSetStage('mesh', 'running');
+  genStartTiming();
+  genSetRunning(true);
+  const result = await window.api.startPipeline({
+    action: 'mesh',
+    args: ['--pick', index, ...presetFlagsFor('mesh')],
+    job: genJob,
+  });
+  if (result && result.error) {
+    genPendingStage = null;
+    genSetRunning(false);
+    showToast(`Mesh failed: ${result.error}`, 'error');
+  }
+});
+
+// Nine minutes of compute should not be discardable by one unguarded click —
+// but a job cancelled in its first seconds has nothing worth guarding, so the
+// confirmation appears only once there is something to lose.
+const GEN_CANCEL_GUARD_MS = 30000;
+
+genCancelBtn.addEventListener('click', () => {
+  const running = Date.now() - genStartTime;
+  if (!genStartTime || running < GEN_CANCEL_GUARD_MS) {
+    window.api.cancelPipeline();
+    return;
+  }
+  if (genLogEl.querySelector('.gen-cancel-confirm')) return;
+
+  const stage = GEN_STAGES.find((s) => genStepEl(s)?.classList.contains('running')) || 'this job';
+  const bar = document.createElement('div');
+  bar.className = 'gen-log-line gen-cancel-confirm gen-log-error';
+  bar.textContent =
+    `Cancel the ${stage} stage after ${genElapsedEl.textContent}? Images already generated and ` +
+    'files the pipeline has written stay in the job directory; only work in progress is lost. ';
+  const yes = document.createElement('button');
+  yes.className = 'small-btn';
+  yes.textContent = 'Cancel the job';
+  const no = document.createElement('button');
+  no.className = 'small-btn';
+  no.textContent = 'Keep running';
+  bar.append(yes, ' ', no);
+  genLogEl.appendChild(bar);
+  genLogEl.scrollTop = genLogEl.scrollHeight;
+
+  yes.addEventListener('click', () => {
+    bar.remove();
+    window.api.cancelPipeline();
+  });
+  no.addEventListener('click', () => bar.remove());
+});
+
+window.api.onPipelineEvent((evt) => {
+  if (!evt || typeof evt !== 'object') return;
+  if (evt.job) genJob = evt.job;
+
+  switch (evt.event) {
+    case 'start':
+      genLog(`${evt.stage}: starting…`);
+      if (GEN_STAGES.includes(evt.stage)) genSetStage(evt.stage, 'running');
+      break;
+    case 'progress':
+      genLog(`${evt.stage}: ${evt.message || ''}`.trim());
+      break;
+    case 'backend':
+      genLog(`${evt.stage}: backend ${evt.backend} ${evt.state}${evt.reason ? ' — ' + evt.reason : ''}`);
+      break;
+    case 'candidate':
+      addGenCandidate(evt);
+      break;
+    case 'score':
+      setGenScore(evt);
+      break;
+    case 'artifact':
+      genLog(`${evt.stage}: artifact (${evt.kind}) ${evt.path}`);
+      break;
+    case 'done':
+      genLog(`${evt.stage}: done`);
+      if (GEN_STAGES.includes(evt.stage)) genSetStage(evt.stage, 'done');
+      break;
+    case 'error':
+      genLog(`${evt.stage}: ${evt.message}`, true);
+      showToast(`Generate ${evt.stage} failed: ${evt.message}`, 'error');
+      if (GEN_STAGES.includes(evt.stage)) genSetStage(evt.stage, 'failed');
+      genPendingStage = null;
+      break;
+  }
+
+  // Fan out to feature modules (the confirm gate builds its picker from
+  // `candidate` and `score`). window.api.onPipelineEvent has no unsubscribe
+  // and must be registered exactly once — standing rule 4 — so subscribers go
+  // through ctx.onPipelineEvent instead. Fanning out LAST means a throwing
+  // subscriber can never break the Generate panel's own handling above
+  // (notifyPipelineEvent try/catches each subscriber anyway).
+  notifyPipelineEvent(evt);
+});
+
+// A ten-minute job finishes while the window is unfocused, and the only
+// success signal was a toast that expired in four seconds.
+function notifyGenDone(text) {
+  if (document.hasFocus()) return;
+  try {
+    if (window.Notification && Notification.permission === 'granted') {
+      new Notification('ClawSCAD', { body: text });
+    } else if (window.Notification && Notification.permission !== 'denied') {
+      Notification.requestPermission().then((p) => {
+        if (p === 'granted') new Notification('ClawSCAD', { body: text });
+      });
+    }
+  } catch {}
+}
+
+window.api.onPipelineLog((text) => {
+  String(text).split('\n').filter(Boolean).forEach((line) => genLog(line));
+});
+
+window.api.onPipelineExit(({ action, code }) => {
+  genSetRunning(false);
+
+  // A non-zero exit mid-chain used to fall into an else branch that reported
+  // nothing at all — the buttons simply came back and the user was left to
+  // guess which stage died.
+  if (code !== 0 && GEN_STAGES.includes(action)) {
+    genSetStage(action, 'failed');
+    if (code !== null) genLog(`${action}: exited with code ${code}`, true);
+  } else if (GEN_STAGES.includes(action)) {
+    genSetStage(action, 'done');
+  }
+
+  if (action === 'mesh' && genPendingStage === 'mesh' && code === 0) {
+    genPendingStage = 'prep';
+    genSetStage('prep', 'running');
+    genSetRunning(true);
+    window.api.startPipeline({ action: 'prep', args: presetFlagsFor('prep'), job: genJob });
+  } else if (action === 'prep' && genPendingStage === 'prep' && code === 0) {
+    genPendingStage = 'checkpoint';
+    genSetStage('checkpoint', 'running');
+    genSetRunning(true);
+    window.api.startPipeline({ action: 'checkpoint', args: presetFlagsFor('checkpoint'), job: genJob });
+  } else if (action === 'checkpoint' && genPendingStage === 'checkpoint') {
+    genPendingStage = null;
+    if (code === 0) {
+      showToast('3D model checkpointed', 'success');
+      notifyGenDone('Your generated sculpt is now a checkpoint.');
+    }
+  } else {
+    genPendingStage = null;
+    if (code !== 0 && action === 'images') notifyGenDone('Image generation failed.');
+  }
+});
+
+refreshGenPipeline();
 
 // ── Session Browser ─────────────────────────────────────────────────────
 
@@ -1457,21 +2425,73 @@ function updateStatus(msg) {
   statusEl.textContent = msg;
 }
 
-// Workspace path in header — show ~ instead of full home path
+// Workspace path in header — show ~ instead of full home path.
+// The old regex only ever collapsed /home/x and /root, so every Windows path
+// ("C:\Users\<name>\...") stayed full-length and ate the header.
 let homeDirPrefix = '';
+// Populated once window.api.getWorkspace() resolves, below; also mirrored
+// onto ctx.workspaceDir (renderer/bus.js) for feature modules.
+let workspaceDir = '';
 function prettyPath(p) {
-  if (homeDirPrefix && p.startsWith(homeDirPrefix)) {
-    return '~' + p.slice(homeDirPrefix.length);
+  if (!p) return '';
+  let out = p;
+  if (homeDirPrefix && out.toLowerCase().startsWith(homeDirPrefix.toLowerCase())) {
+    out = '~' + out.slice(homeDirPrefix.length);
   }
-  return p;
+  if (out.length <= 52) return out;
+  // Middle ellipsis: the drive and the workspace name are the two useful ends.
+  const sep = out.includes('\\') ? '\\' : '/';
+  const parts = out.split(sep);
+  if (parts.length < 4) return out;
+  return [parts[0], parts[1], '…', parts[parts.length - 1]].join(sep);
 }
 
+window.api.getAppVersion().then((v) => {
+  const versionEl = document.getElementById('app-version');
+  if (versionEl && v) versionEl.textContent = `v${v}`;
+});
+
+// ── Auto-update status pill ─────────────────────────────────────────────
+// The updater installs on quit by itself, so the only state worth showing is
+// READY: "a newer ClawSCAD is already downloaded, restart whenever you like".
+// Checking / downloading / errors stay out of the user's way — an update they
+// can't act on is not news, and a failed check is not their problem to fix.
+(() => {
+  const pill = document.getElementById('update-pill');
+  if (!pill || !window.api.onUpdateStatus) return;
+
+  function render(s) {
+    if (s && s.status === 'ready' && s.version) {
+      pill.textContent = `Update ready — v${s.version}`;
+      pill.title = `ClawSCAD ${s.version} has been downloaded. It installs when you quit, or click to restart now.`;
+      pill.classList.remove('hidden');
+    } else {
+      pill.classList.add('hidden');
+    }
+  }
+
+  pill.addEventListener('click', () => {
+    pill.disabled = true;
+    pill.textContent = 'Restarting…';
+    window.api.installUpdate();
+  });
+
+  window.api.onUpdateStatus(render);
+  // A window opened after the update was staged has missed the push.
+  window.api.getUpdateStatus().then(render).catch(() => {});
+})();
+
 window.api.getWorkspace().then((ws) => {
-  // Detect home dir from the workspace path
-  const match = ws.match(/^(\/home\/[^/]+|\/root)/);
+  // Detect home dir from the workspace path (POSIX and Windows both)
+  const match = ws.match(/^(\/home\/[^/]+|\/Users\/[^/]+|\/root|[A-Za-z]:\\Users\\[^\\]+)/);
   if (match) homeDirPrefix = match[1];
   const pathEl = document.getElementById('workspace-path');
-  if (pathEl) pathEl.textContent = prettyPath(ws);
+  if (pathEl) {
+    pathEl.textContent = prettyPath(ws);
+    pathEl.title = ws;
+  }
+  workspaceDir = ws;
+  ctx.workspaceDir = ws; // ctx is populated synchronously below; this resolves later, so mirror it in place
 });
 
 // ── App Menu ────────────────────────────────────────────────────────────
@@ -1601,14 +2621,28 @@ swatchEditor.addEventListener('change', () => {
 document.querySelectorAll('[data-export]').forEach((btn) => {
   btn.addEventListener('click', async () => {
     const format = btn.dataset.export;
-    showToast(`Exporting ${format.toUpperCase()}...`, 'info');
     const result = await window.api.exportModel(format);
     if (result && result.path) {
       showToast(`Exported to ${result.path}`, 'success');
     } else if (result && result.error) {
+      // Clicking export with nothing active used to do nothing, silently and
+      // permanently. Every outcome now says something.
+      showRenderError(result.error, result.fault || 'model');
       showToast(`Export failed: ${result.error.substring(0, 80)}`, 'error');
     }
   });
+});
+
+// OpenSCAD runs for minutes on a boolean-heavy export; reuse the overlay the
+// app already has for exactly this shape of wait.
+window.api.onExportStart(({ format, file }) => {
+  showRenderOverlay(`${file} → ${format.toUpperCase()}`);
+  renderOverlay.querySelector('.overlay-text').textContent =
+    `Exporting ${file} as ${format.toUpperCase()}...`;
+});
+
+window.api.onExportDone((data) => {
+  if (!data.error) hideRenderOverlay();
 });
 
 // ── Path Bar Dropdown ───────────────────────────────────────────────────
@@ -2116,8 +3150,10 @@ function addSecondViewport() {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'viewport-close-btn';
-  closeBtn.innerHTML = '\u00d7';
+  closeBtn.innerHTML =
+    '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
   closeBtn.title = 'Close viewport';
+  closeBtn.setAttribute('aria-label', 'Close viewport');
   closeBtn.addEventListener('click', (e) => { e.stopPropagation(); removeSecondViewport(); });
   pane.appendChild(closeBtn);
 
@@ -2153,9 +3189,11 @@ function addSecondViewport() {
   // --- Source editor (read-only pre with syntax coloring) ---
   const editorPanel = document.createElement('div');
   editorPanel.className = 'vp2-editor-panel collapsed';
+  // Same .panel-header as the primary chrome: these two used to be 22px while
+  // everything else was 26px, for no reason anyone chose.
   editorPanel.innerHTML = `
-    <div class="vp2-editor-header">
-      <button class="panel-toggle vp2-editor-toggle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg></button>
+    <div class="vp2-editor-header panel-header">
+      <button class="panel-toggle vp2-editor-toggle" aria-label="Toggle source"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg></button>
       <span class="label">Source</span>
       <span class="vp2-editor-filename"></span>
     </div>
@@ -2169,9 +3207,9 @@ function addSecondViewport() {
   const cpPanel = document.createElement('div');
   cpPanel.className = 'vp2-checkpoint-panel';
   cpPanel.innerHTML = `
-    <div class="vp2-checkpoint-header">
-      <button class="panel-toggle vp2-cp-toggle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg></button>
-      <span class="label">History</span>
+    <div class="vp2-checkpoint-header panel-header">
+      <button class="panel-toggle vp2-cp-toggle" aria-label="Toggle checkpoints"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg></button>
+      <span class="label">Checkpoints</span>
     </div>
     <div class="vp2-checkpoint-tree"></div>`;
   cpPanel.querySelector('.vp2-cp-toggle').addEventListener('click', () => {
@@ -2474,11 +3512,143 @@ function animate() {
   activeControls.update();
   renderer3d.render(scene, activeCamera);
 
-  // Second viewport (shares the same scene, independent camera)
+  // Second viewport — its own scene (v2.scene, built in addSecondViewport())
+  // and its own camera/controls (v2.camera/v2.controls). It must never
+  // render the primary `scene` with the primary `activeCamera` — that's what
+  // made opening a second viewport throw every frame (arch-map landmine 10).
   if (viewport2) {
-    viewport2.activeCtrl.update();
-    viewport2.renderer.render(scene, viewport2.activeCam);
+    viewport2.controls.update();
+    viewport2.renderer.render(viewport2.scene, viewport2.camera);
   }
 }
 
 animate();
+
+// ── clawscad:anchor:modules ──────────────────────────────────────────────
+// Feature modules mount here. Each owns its own file under renderer/;
+// nothing below this line reads renderer.js internals except through the
+// `ctx` object exported by renderer/bus.js, populated just above the mount
+// calls. Every mountX(ctx) must guard `if (!el) return;` for any DOM it
+// expects (arch-map landmine 12 — everything above runs at import time and
+// assumes its own DOM already exists; feature modules get no such guarantee
+// for containers other packages haven't built yet).
+ctx.api = window.api;
+ctx.showToast = showToast;
+ctx.setExpanded = setExpanded;
+ctx.updateStatus = updateStatus;
+ctx.prettyPath = prettyPath;
+ctx.workspaceDir = workspaceDir; // may still be '' here — window.api.getWorkspace() is async and mirrors into ctx.workspaceDir once it resolves
+// ── v0.6 studio hooks into the generate pipeline ────────────────────────
+// The studio may not open a second `pipeline:start` call site for a stage this
+// file already owns (contract §S1). Rather than have it click buttons for the
+// two cases that have no button, renderer.js exposes the dispatch itself and
+// keeps ownership of genJob / genPendingStage / the stepper.
+ctx.startImageRound = () => startImageGeneration({ continueJob: true });
+
+/**
+ * Flow C: mesh a picture the user already has. There is no button for this —
+ * Make-3D always means "mesh the candidate I picked" — so without this hook the
+ * studio could start the mesh but never chain it: genPendingStage is private to
+ * this file, and it is what the pipeline:exit handler reads to run prep and
+ * then checkpoint. The mesh would finish and simply stop, leaving an .stl in a
+ * job dir and no checkpoint, which to the user looks exactly like nothing
+ * happening.
+ *
+ * Deliberately passes no `job`: `mesh --image … --new-job` creates its own,
+ * slugged from the image filename, and prep/checkpoint then default to the most
+ * recent job — which is that one.
+ */
+ctx.startMeshChain = async (args) => {
+  if (genRunning) return { error: 'already-running' };
+  genSelectedKey = null;
+  genJob = null;
+  genResetStepper();
+  genPendingStage = 'mesh';
+  genSetStage('images', 'done');
+  genSetStage('mesh', 'running');
+  genStartTiming();
+  genSetRunning(true);
+  const result = await window.api.startPipeline({
+    action: 'mesh',
+    args: [...(Array.isArray(args) ? args.map(String) : []), ...presetFlagsFor('mesh')],
+  });
+  if (result && result.error) {
+    genPendingStage = null;
+    genSetRunning(false);
+    showToast(`Mesh failed: ${result.error}`, 'error');
+  }
+  return result;
+};
+
+ctx.els = {
+  composer: document.getElementById('composer'),
+  gallerySheet: document.getElementById('gallery-sheet'),
+  confirmSheet: document.getElementById('confirm-sheet'),
+  viewportsContainer: document.getElementById('viewports-container'),
+  rightPanel: document.getElementById('right-panel'),
+  mainContent: document.getElementById('main-content'),
+  studio: document.getElementById('studio'),
+  viewSwitch: document.getElementById('view-switch'),
+};
+
+import { mountComposer } from './renderer/composer.js';
+import { mountUploads } from './renderer/uploads.js';
+import { mountPresets } from './renderer/presets-ui.js';
+import { mountGallery } from './renderer/gallery.js';
+import { mountOnboarding } from './renderer/onboarding.js';
+import { mountConfirmGate } from './renderer/confirm-gate.js';
+import { mountGuided } from './renderer/categories-ui.js';
+import { mountStudio } from './renderer/studio.js';
+mountComposer(ctx); mountUploads(ctx); mountPresets(ctx); mountGallery(ctx); mountOnboarding(ctx);
+
+// ── v0.4 guided make (docs/v04-guided-make-contracts.md) ────────────────
+// Order matters and is fixed: the confirm gate publishes ctx.confirm, and the
+// guided grid reads BOTH ctx.confirm and ctx.presets, so it mounts last. The
+// taxonomy is fetched before either, because a grid with no categories is a
+// blank panel rather than a degraded one — on failure ctx.categories carries
+// the error text and P8 renders a stated fallback instead of nothing.
+window.api
+  .categoriesLoad()
+  .then((result) => {
+    ctx.categories = result && typeof result === 'object' ? result : { categories: null, error: 'categories:load returned nothing' };
+  })
+  .catch((err) => {
+    ctx.categories = { categories: null, error: String((err && err.message) || err) };
+  })
+  .then(() => {
+    try {
+      mountConfirmGate(ctx);
+    } catch (err) {
+      console.error('[renderer] mountConfirmGate threw', err);
+    }
+    try {
+      mountGuided(ctx);
+    } catch (err) {
+      console.error('[renderer] mountGuided threw', err);
+    }
+    // ── v0.6 studio (docs/v06-studio-contracts.md) ──────────────────────
+    // Mounts LAST: it reads ctx.presets, ctx.confirm, ctx.guided and
+    // ctx.categories, and drives the #gen-* call sites this file owns. Its
+    // own catalog load is inside mountStudio, because a studio with zero
+    // tools is a supported state and must not delay the front door.
+    //
+    // Wrapped separately from mountGuided on purpose: a mount chain of bare
+    // statements lets one module's throw take its successors with it, which
+    // is exactly how v0.3 silently lost gallery and onboarding on every
+    // launch. One try per mount, always.
+    try {
+      mountStudio(ctx);
+    } catch (err) {
+      console.error('[renderer] mountStudio threw', err);
+    }
+    // If the studio did not mount — it threw, or its own guards bailed — the
+    // header's Make tab would be a button that visibly does nothing, which is
+    // worse than an absent feature. Remove the switch and leave the workbench
+    // as the only view, which is exactly v0.5's behaviour. Keyed on ctx.studio
+    // rather than on the throw, because a mount that returns early past a
+    // guard fails just as dead and never reaches the catch.
+    if (!ctx.studio && ctx.els.viewSwitch) {
+      ctx.els.viewSwitch.hidden = true;
+      document.body.dataset.view = 'workbench';
+    }
+  });

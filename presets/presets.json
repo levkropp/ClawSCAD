@@ -1,0 +1,544 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "fidelity",
+      "exclusive": true,
+      "label": "Fidelity"
+    },
+    {
+      "id": "purpose",
+      "exclusive": false,
+      "label": "Purpose"
+    }
+  ],
+  "merge_policy": {
+    "min_wall_mm": "max",
+    "min_feature_mm": "max",
+    "fillet_min_r_mm": "max",
+    "perimeters": "max",
+    "infill_pct": "max",
+    "boss_wall_mm": "max",
+    "fs": "min",
+    "fa": "min",
+    "layer_height_mm": "min",
+    "clearance_moving_mm": "max",
+    "hole_comp_mm": "max",
+    "fn_fastener": "max",
+    "bottom_chamfer_mm": "max",
+    "supportless_required": "and",
+    "refuse_generated": "and",
+    "brim_required": "or",
+    "bottom_chamfer_required": "or",
+    "slicer_profile": "first",
+    "mesh_color": "first",
+    "prompt_blocks": "concat"
+  },
+  "presets": [
+    {
+      "id": "miniature",
+      "label": "Miniature — high detail",
+      "icon": "chess-knight",
+      "group": "fidelity",
+      "order": 10,
+      "summary": "Small display piece. Detail beats speed; supports allowed.",
+      "tracks": {
+        "parametric": true,
+        "generated": true
+      },
+      "params": {
+        "fa": 2,
+        "fs": 0.2,
+        "fn_fastener": 64,
+        "min_wall_mm": 0.8,
+        "min_feature_mm": 1,
+        "relief_min_w_mm": 0.6,
+        "relief_emboss_h_mm": 0.4,
+        "relief_engrave_d_mm": 0.4,
+        "min_gap_mm": 0.6,
+        "knife_edge_min_flat_mm": 0.5,
+        "layer_height_mm": 0.08,
+        "perimeters": 3,
+        "infill_pct": 15,
+        "supportless_required": false,
+        "support": {
+          "style": "tree",
+          "z_distance_mm": 0.2,
+          "interface_density_pct": 50
+        },
+        "brim_required": true,
+        "brim_mm": 5,
+        "bottom_chamfer_required": true,
+        "bottom_chamfer_mm": 0.4,
+        "tilt_back_deg": [
+          15,
+          20
+        ],
+        "slicer_profile": "fine"
+      },
+      "forbid": [
+        "wispy hair",
+        "thin swords / spear tips",
+        "sub-1mm chains",
+        "unsupported trailing edges",
+        "free-floating elements",
+        "knife edges"
+      ],
+      "prompt": {
+        "parametric": "INTENT PRESET: MINIATURE — HIGH DETAIL.\nTarget: a small display object printed on a Bambu P1S with a 0.4 mm nozzle at 0.08 mm layers.\n\nResolution: set $fa = 2 and $fs = 0.2 at the top of the file. Never set a global $fn.\nFastener or bearing bores, if any, get an explicit $fn = 64.\n\nMinimum printable geometry — treat these as hard floors, not suggestions:\n  - free-standing protrusion (finger, spike, antenna, blade): >= 1.0 mm thick\n  - solid wall: >= 0.8 mm\n  - raised relief: >= 0.6 mm wide, 0.3-0.6 mm proud\n  - engraved relief: >= 0.6 mm wide, >= 0.4 mm deep\n  - gap between two details: >= 0.6 mm\n  - NO knife edges. Every terminating edge is truncated to a >= 0.5 mm flat or a 0.3 mm chamfer.\n    A sub-0.42 mm edge is narrower than one extrusion and prints as a ragged blob.\nDetail finer than the nozzle cannot exist. Stylise up: make features chunkier and more\ndeliberate rather than finer. Chunky detail reads well on FDM; delicate detail disappears.\n\nDo not model: wispy hair, thin swords or spear tips, sub-1 mm chains, trailing unsupported\ncloak edges, free-floating elements. If the concept needs one, either thicken it 2-3x or\nemit it as a separate part on the same plate.\n\nSupports ARE allowed for this preset (tree/organic, Z-distance 0.2 mm) - detail beats\nsupportlessness here. Orient the piece tilted 15-20 degrees backward so layer lines fall on\nthe back, not the face, and put the most detailed surface facing up. Bases print flat with a\n5 mm brim.\n\nColour every part with color(). Add a bottom chamfer of 0.4 mm x 45 degrees where the model\nmeets the bed. Keep the model manifold; overlap coincident-height neighbours by eps = 0.01.",
+        "parametric_provenance": "verbatim — intent-presets.md §8.1"
+      },
+      "generated": {
+        "cli": {
+          "images": {
+            "count": 6,
+            "size": "2K",
+            "ar": "3:4"
+          },
+          "mesh": {
+            "size_mm": 32,
+            "seeds": 2
+          },
+          "prep": {
+            "target_faces": 300000,
+            "flat_cut_mm": 0
+          },
+          "checkpoint": {
+            "color": "Gainsboro"
+          }
+        },
+        "size_mm_options": [
+          {
+            "label": "Tabletop 28–32 mm",
+            "value": 32
+          },
+          {
+            "label": "Heroic 54 mm",
+            "value": 54
+          },
+          {
+            "label": "Display 75 mm",
+            "value": 75
+          }
+        ],
+        "image_suffix": "Single centred subject on a plain seamless light-grey background, even soft diffused\nlighting from the front-upper-left with no harsh shadows and no strong rim light, full\nsubject visible with clear margin on all sides, sharp focus throughout, no depth-of-field\nblur. Three-quarter view. Sculptural collectible-figure look: bold simplified forms and\nchunky deliberate detail, clean readable silhouette, features exaggerated slightly larger\nthan life so they survive at small scale. Matte unpainted grey resin/clay finish, one\nuniform colour. Reproduce a real physical object - do NOT invent, add, extend, mirror,\nflatten or fill in geometry, and do not normalise varying surface depths to uniform.",
+        "negative": "multiple objects, cropped, cut off, busy background, scene, props, harsh shadows, motion\nblur, depth of field, text, watermark, signature, logo, painted colours, glossy specular\nhighlights, wispy hair, thin trailing ribbons, thin sword or spear tips, delicate chains,\nfloating disconnected parts, transparent or glass materials, extreme thin filigree",
+        "post": {
+          "smoothing": "none",
+          "remesh_before_sharpen_mm": 1.2,
+          "min_thickness_warn_mm": 1,
+          "min_thickness_action": "warn",
+          "require_watertight": true
+        }
+      }
+    },
+    {
+      "id": "prototype",
+      "label": "Prototype — quick print",
+      "group": "fidelity",
+      "order": 20,
+      "summary": "Fast, coarse, disposable. Explicitly not a final part.",
+      "tracks": {
+        "parametric": true,
+        "generated": true
+      },
+      "params": {
+        "fa": 6,
+        "fs": 0.8,
+        "min_wall_mm": 1.2,
+        "layer_height_mm": 0.24,
+        "perimeters": 3,
+        "infill_pct": 12,
+        "bolt_fit": "free",
+        "clearance_moving_mm": 0.3,
+        "supportless_required": true,
+        "fillets": "none",
+        "bottom_chamfer_required": true,
+        "bottom_chamfer_mm": 0.4,
+        "expose_scale_variable": true,
+        "slicer_profile": "draft",
+        "require_tradeoff_comment": true
+      },
+      "prompt": {
+        "parametric": "INTENT PRESET: PROTOTYPE - QUICK PRINT.\nOptimise for iteration latency, not for a finished part. Say so in the file.\n\n  $fa = 6; $fs = 0.8;          // coarse on purpose - fast preview and fast render\n  wall = 1.2;                  // 3 perimeters, holds its shape, half the material\n  scale_factor = 1.0;          // set 0.5 to print a half-scale check article\n\nLoose everywhere: bolt bores at the FREE fit column, moving clearances at 0.30, no\ninterference fits. A prototype that will not assemble teaches nothing.\nLayer height 0.20-0.28 mm, infill 10-15% gyroid.\n\nAVOID SUPPORTS by redesigning to 45 degrees rather than by adding them - support time and\nremoval time are most of the iteration cost. No fillets except a 0.4 mm bottom chamfer;\nfillets are the slowest thing to retune and buy nothing at this stage.\n\nKeep the code MAXIMALLY EDITABLE, because the next checkpoint will edit it: every dimension\na named variable in one block at the top, one module per feature, no repeated literals.\n\nAdd a second comment line naming exactly what was traded away, for example:\n// PROTOTYPE: coarse curves ($fs=0.8), free fits (+0.30), 1.2mm walls - NOT a final part\n\nColour every part. Keep it manifold.",
+        "parametric_provenance": "verbatim — intent-presets.md §8.4"
+      },
+      "generated": {
+        "cli": {
+          "images": {
+            "count": 3,
+            "size": "1K",
+            "ar": "1:1"
+          },
+          "mesh": {
+            "size_mm": null,
+            "seeds": 1
+          },
+          "prep": {
+            "target_faces": 60000,
+            "flat_cut_mm": 2
+          },
+          "checkpoint": {
+            "color": "Silver"
+          }
+        },
+        "image_suffix": "Single centred object, plain light background, even flat lighting, whole object in frame,\nsimple blocky readable forms, matte neutral grey, three-quarter view, no fine surface detail.",
+        "negative": "multiple objects, background clutter, text, watermark, harsh shadows, depth of field,\nfine filigree, thin protrusions, floating parts, cropped"
+      }
+    },
+    {
+      "id": "strong",
+      "label": "Strong — load bearing",
+      "group": "purpose",
+      "order": 30,
+      "summary": "It will be pushed, pulled, dropped or clamped.",
+      "tracks": {
+        "parametric": true,
+        "generated": false
+      },
+      "refuse_generated": true,
+      "refusal_text": "Generated sculpts are not dimensionally controlled — arbitrary scale, no flat mating faces, no thread or tolerance guarantees. Load-bearing and hardware-mating parts are modelled parametrically. Remove this preset to use the generator, or generate a decorative shell and branch it to add the parametric features.",
+      "params": {
+        "fa": 2,
+        "fs": 0.3,
+        "min_wall_mm": 2,
+        "load_section_mm": 2.4,
+        "min_feature_mm": 1,
+        "perimeters": 4,
+        "infill_pct": 40,
+        "infill_pattern": "gyroid",
+        "fillet_min_r_mm": 1,
+        "fillet_rule": "0.5 * local_wall",
+        "bottom_chamfer_required": true,
+        "bottom_chamfer_mm": 0.6,
+        "plan_corner_fillet_mm": [
+          1,
+          3
+        ],
+        "rib": {
+          "thickness_rule": "= wall",
+          "max_face_angle_deg": 45,
+          "min_spacing_rule": "3 * wall"
+        },
+        "solid_around_fasteners": true,
+        "supportless_required": true,
+        "max_overhang_deg": 40,
+        "horizontal_bore_profile": "teardrop",
+        "orientation_declaration_required": true,
+        "slicer_profile": "strong"
+      },
+      "forbid": [
+        "living hinges in PLA",
+        "thin flexure membranes",
+        "sharp internal corners",
+        "rigid barbs into hard material",
+        "draft angles",
+        "support material"
+      ],
+      "prompt": {
+        "parametric": "INTENT PRESET: STRONG - LOAD BEARING.\nThis part will be loaded. FDM is orthotropic: the Z (interlayer) direction carries only\n40-75% of the XY tensile strength and 10-30% of the XY ductility. Design around that.\n\nORIENTATION IS THE FIRST DECISION - state it in a comment before writing geometry:\n  1. Identify the primary tensile/bending axis and lay it in the bed plane (XY).\n  2. A hook, bracket or cantilever prints lying on its side so bending stresses stay in-plane,\n     never standing up with the load pulling layers apart.\n  3. No layer boundary may coincide with the maximum-moment section. Move it or thicken 1.5x.\n  4. Pins, shafts and hinge axes lie horizontal so strands run along the axis.\n  5. Where Z tension is unavoidable, bridge the layers with a real fastener - do not ask the\n     plastic to do it.\n\nSections and features:\n  - minimum structural wall 2.0 mm; load-bearing sections >= 2.4 mm at 40-60% infill\n  - fillet EVERY internal corner: r >= 0.5 x local wall, minimum 1.0 mm\n  - chamfer the bottom outer edge 0.6 mm x 45 degrees (NOT a fillet - a bottom fillet begins\n    as a >45 degree overhang); fillet bottom corners in plan view 1-3 mm against warping\n  - ribs and gussets: thickness = wall, faces at <= 45 degrees so they self-support,\n    spacing >= 3 x wall. Prefer ribs to solid mass.\n  - force solid material around every fastener boss and bearing surface; never let a screw\n    thread into infill voids.\n\nSUPPORTLESS IS MANDATORY. Overhang budget 40 degrees (5 degrees of margin on the 45 rule).\nHorizontal bores get a teardrop cross-section:\n  hull() { circle(d=d); translate([0, d*0.62]) circle(d=0.6); }\nSupport scars are crack initiators on a load path.\n\nDo NOT use: living hinges or thin flexure membranes in PLA (they fatigue and crack - use a\nknuckle hinge with a bridged pin); sharp internal corners; rigid barbs pressed into hard\nmaterial (use a split-tip spring, slot width ~0.22 x d at ~75% depth); draft angles\n(that is an injection-moulding concept and is wrong for FDM).\n\nSet $fa = 2, $fs = 0.3. Colour every part. Keep it manifold.\nIf the strong orientation does not fit the 256x256 bed, check the 45-degree diagonal fit\n((L + W) / sqrt(2) <= 256) and bake the rotation into the geometry - the slicer's arrange\nonly translates and Z-rotates, it will not reorient the part for you.",
+        "parametric_provenance": "verbatim — intent-presets.md §8.2"
+      }
+    },
+    {
+      "id": "fits-hardware",
+      "label": "Fits screws & parts",
+      "group": "purpose",
+      "order": 40,
+      "summary": "Must mate with real M-hardware or another printed part.",
+      "tracks": {
+        "parametric": true,
+        "generated": false
+      },
+      "refuse_generated": true,
+      "refusal_text": "Generated sculpts are not dimensionally controlled — arbitrary scale, no flat mating faces, no thread or tolerance guarantees. Load-bearing and hardware-mating parts are modelled parametrically. Remove this preset to use the generator, or generate a decorative shell and branch it to add the parametric features.",
+      "params": {
+        "fa": 2,
+        "fs": 0.25,
+        "fn_fastener": 64,
+        "hole_comp_mm": 0.2,
+        "clearance_moving_mm": 0.2,
+        "default_bolt_fit": "normal",
+        "require_named_variables": true,
+        "inscribed_polygon_compensation": true,
+        "slicer_profile": "functional"
+      },
+      "tables": {
+        "bolt_clearance_modelled_mm": {
+          "_note": "ISO 273 / ASME B18.2.8 clearance + hole_comp 0.20",
+          "M2": [
+            2.4,
+            2.6,
+            2.8
+          ],
+          "M2.5": [
+            2.9,
+            3.1,
+            3.3
+          ],
+          "M3": [
+            3.4,
+            3.6,
+            3.8
+          ],
+          "M4": [
+            4.5,
+            4.7,
+            5
+          ],
+          "M5": [
+            5.5,
+            5.7,
+            6
+          ],
+          "M6": [
+            6.6,
+            6.8,
+            7.2
+          ],
+          "M8": [
+            8.6,
+            9.2,
+            10.2
+          ],
+          "_columns": [
+            "close",
+            "normal",
+            "free"
+          ]
+        },
+        "counterbore_mm": {
+          "M3": [
+            6,
+            3.2
+          ],
+          "M4": [
+            7.5,
+            4.2
+          ],
+          "M5": [
+            9,
+            5.2
+          ],
+          "_columns": [
+            "diameter",
+            "depth"
+          ]
+        },
+        "countersink_top_d_mm": {
+          "M3": 6.4,
+          "M4": 8.4,
+          "M5": 10.4
+        },
+        "nut_trap_mm": {
+          "M3": [
+            5.7,
+            2.6
+          ],
+          "M4": [
+            7.2,
+            3.4
+          ],
+          "M5": [
+            8.2,
+            4.9
+          ],
+          "_columns": [
+            "across_flats",
+            "depth"
+          ]
+        },
+        "heat_set_mm": {
+          "_columns": [
+            "bore",
+            "pocket_depth",
+            "min_wall",
+            "min_boss_od"
+          ],
+          "M2": [
+            3.4,
+            4.5,
+            1.5,
+            6.4
+          ],
+          "M2.5": [
+            3.8,
+            6.2,
+            1.5,
+            6.8
+          ],
+          "M3": [
+            4.2,
+            6.2,
+            1.5,
+            7.2
+          ],
+          "M4": [
+            5.8,
+            8.6,
+            2,
+            9.8
+          ],
+          "M5": [
+            6.6,
+            10,
+            2.5,
+            11.6
+          ],
+          "M6": [
+            8.2,
+            13.2,
+            2.5,
+            13.2
+          ],
+          "_chamfer_mm": 1,
+          "_chamfer_deg": 45,
+          "_material_delta": {
+            "PLA": 0,
+            "PETG": 0.02,
+            "ABS": 0.05,
+            "Nylon": 0.06
+          }
+        },
+        "self_tapping_mm": {
+          "_columns": [
+            "pilot",
+            "boss_od",
+            "engagement_depth"
+          ],
+          "M3": [
+            2.4,
+            6.6,
+            7.5
+          ],
+          "M4": [
+            3.2,
+            8.8,
+            10
+          ],
+          "M5": [
+            4,
+            11,
+            12.5
+          ]
+        },
+        "printed_fits_mm": {
+          "press": -0.05,
+          "snug": 0.1,
+          "sliding": 0.2,
+          "loose": 0.3
+        },
+        "magnet_pocket_mm": {
+          "diameter_delta": 0.15,
+          "depth_delta": 0.1,
+          "blind_ceiling": 0.3
+        },
+        "printed_thread_min": "M6"
+      },
+      "prompt": {
+        "parametric": "INTENT PRESET: FITS SCREWS AND PARTS.\nThis part mates with real hardware or with another printed part. Dimensions are contractual.\n\nDeclare these at the top of the file and reference them everywhere - never inline a magic\nnumber:\n  hole_comp = 0.20;   // FDM bore compensation; printed holes come out undersize. 0.10 on a\n                      // well-calibrated P1S with hole compensation enabled.\n  tol       = 0.20;   // moving/sliding fit clearance, field-calibrated for P1S + PLA\n\nTHE INSCRIBED-POLYGON TRAP - this preset's most common silent failure: OpenSCAD's cylinder()\nis INSCRIBED in the nominal diameter, so a bore drawn at d = 3.6 with $fn = 16 only passes\n3.6 * cos(180/16) = 3.53 mm and an M3 will not go through. Give EVERY fastener bore\n$fn = 64 (error < 0.15%), or compensate explicitly with d / cos(180/$fn).\n\nBOLT CLEARANCE BORES - model these diameters (ISO 273 clearance + hole_comp = 0.20).\nDefault to the NORMAL column.\n             close   normal   free\n  M2         2.4     2.6      2.8\n  M2.5       2.9     3.1      3.3\n  M3         3.4     3.6      3.8\n  M4         4.5     4.7      5.0\n  M5         5.5     5.7      6.0\n  M6         6.6     6.8      7.2\n  M8         8.6     9.2      10.2      <- M8 breaks the pattern; do not extrapolate.\nUse close only when the bolt line locates the part; use free when stacking tolerances across\ntwo printed parts.\n\nSOCKET-HEAD COUNTERBORE / COUNTERSINK (diameter, depth):\n  M3  counterbore 6.0 x 3.2   |  90-degree countersink top dia 6.4\n  M4  counterbore 7.5 x 4.2   |  90-degree countersink top dia 8.4\n  M5  counterbore 9.0 x 5.2   |  90-degree countersink top dia 10.4\nA counterbore ceiling bridges cleanly. A countersink in the BOTTOM face is a >45 degree\noverhang - flip the part or use a counterbore instead.\n\nHEX NUT TRAPS (pocket across-flats x depth): M3 5.7 x 2.6 | M4 7.2 x 3.4 | M5 8.2 x 4.9.\nOrient a side-entry trap so its roof is a flat bridge, not an arch. 0.4 mm lead-in chamfer.\n\nHEAT-SET INSERTS - these are pocket bores; hole_comp does NOT apply (the brass melts its own\nfit). Bore / pocket depth / minimum wall around the pocket / minimum boss outer diameter:\n  M2    3.4  /  4.5  / 1.5 / 6.4\n  M2.5  3.8  /  6.2  / 1.5 / 6.8\n  M3    4.2  /  6.2  / 1.5 / 7.2     (4.5 deep for short inserts)\n  M4    5.8  /  8.6  / 2.0 / 9.8\n  M5    6.6  / 10.0  / 2.5 / 11.6\n  M6    8.2  / 13.2  / 2.5 / 13.2\nA 1 mm x 45 degree chamfer at the pocket mouth is MANDATORY. Pocket depth = insert length\n+ 0.5 mm. Prefer a through-bore so displaced plastic pushes down, not up into the threads.\nPETG +0.02, ABS/ASA +0.05, nylon +0.06 on the bore.\n\nSELF-TAPPING BOSSES (pilot / boss outer diameter / engagement depth):\n  M3  2.4 / 6.6 / 7.5   |   M4  3.2 / 8.8 / 10.0   |   M5  4.0 / 11.0 / 12.5\nPilot = 0.8 x major diameter. Boss interior must be solid. Too big strips, too small cracks\nthe boss. A self-cut thread survives only a few assembly cycles - if the part will be opened\nrepeatedly, specify a heat-set insert instead and say so in the comment.\n\nPRINTED THREADS: do not model M-threads below M6 at a 0.4 mm nozzle - the pitch is at the\nextrusion width and the helix comes out ragged. For M6 and up use BOSL2 threaded_rod() /\nthreaded_nut() with $slop = 0.15-0.2, or a coarse trapezoidal/ACME profile for anything\nturned repeatedly.\n\nPRINTED-TO-PRINTED FITS (total diametral clearance):\n  press/interference -0.05 to 0.00 (needs a lead-in chamfer; wall >= 2 mm or PLA splits)\n  snug hand-assembly +0.10   |   sliding or rotating +0.20 (= tol)   |   forgiving +0.30\nPrint-in-place hinges use tol for BOTH the radial pin-to-sleeve gap and the axial gap\nbetween knuckles, from one variable. Keep each pin bridge span <= 18 mm.\nMagnet pockets: magnet diameter + 0.15, depth + 0.10, 0.3 mm blind ceiling.\n\nSet $fa = 2, $fs = 0.25 globally and $fn = 64 on fastener features. Colour every part.",
+        "parametric_provenance": "verbatim — intent-presets.md §8.3"
+      }
+    },
+    {
+      "id": "decor-organic",
+      "label": "Decor / organic",
+      "group": "purpose",
+      "order": 50,
+      "summary": "Looks matter; nothing has to fit anything.",
+      "tracks": {
+        "parametric": true,
+        "generated": true
+      },
+      "prefers_track": "generated",
+      "params": {
+        "fa": 2,
+        "fs": 0.3,
+        "min_wall_mm": 1.2,
+        "perimeters": 3,
+        "infill_pct": 10,
+        "layer_height_mm": 0.2,
+        "libraries": [
+          "BOSL2/isosurface",
+          "BOSL2/skin",
+          "BOSL2/beziers"
+        ],
+        "metaball_voxels": {
+          "preview": 10000,
+          "final": 75000
+        },
+        "render_timeout_s": 300,
+        "slicer_profile": "decor"
+      },
+      "generated": {
+        "cli": {
+          "images": {
+            "count": 4,
+            "size": "2K",
+            "ar": "1:1"
+          },
+          "mesh": {
+            "size_mm": 120,
+            "seeds": 2
+          },
+          "prep": {
+            "target_faces": 150000,
+            "flat_cut_mm": 2.5,
+            "flat_cut_caveat": "run_prep_stage hardcodes the cut-plane normal to +Y — this preset cannot claim the -Z face the bear/owl recipe assumes; the flat cut still lands, just not guaranteed on that face."
+          },
+          "checkpoint": {
+            "color": "Peru"
+          }
+        },
+        "image_suffix": "Single centred object on a plain seamless light-grey background, even soft diffused studio\nlighting, whole object in frame with margin, sharp focus, no depth-of-field blur, matte\nuntextured neutral clay finish in one uniform colour, three-quarter view. Rounded volumetric\nforms with a stable flat-ish underside. Reproduce a real physical object - do NOT invent,\nadd, extend, mirror, round off, flatten or fill in geometry; preserve every recess at its\nexact depth.",
+        "negative": "multiple objects, scene, background clutter, hands, people, text, watermark, harsh shadows,\nmotion blur, depth of field, glossy reflections, transparent materials, thin fragile\nprotrusions, floating disconnected parts, cropped",
+        "post": {
+          "min_thickness_warn_mm": 1.5,
+          "require_watertight": true,
+          "smoothing": "none"
+        }
+      },
+      "prompt": {
+        "parametric": "INTENT PRESET: DECOR / ORGANIC.\nLooks matter here; nothing in this part has to fit anything. This is the one preset where\nsculptural quality outranks dimensional discipline.\n\nPrefer BOSL2 organic-modelling primitives over hand-rolled hulls: metaballs, path_sweep(),\nskin() (see openscad-organic notes). Voxel count 10,000 for preview, 50,000-100,000 for a\nfinal render. When you do fall back to hull(), hull PAIRS of primitives, never the whole\nassembly at once, and prefer cylinders over spheres inside a hull. Avoid minkowski() - it is\nthe slowest primitive available and organic forms rarely need it.\n\nResolution: $fa = 2, $fs = 0.3 - fine enough for smooth organic surfaces without the render\ncost of a miniature-grade setting.\n\nSections: wall 1.2 mm, infill 10% (this is a decorative, not load-bearing, class of part).\n\nRender timeout: raise it. Metaball and skin() models routinely exceed a 60 second default\nrender budget - say so if the render tool needs a longer timeout argument.\n\nColour every part with color(). Keep the model manifold; overlap coincident-height\nneighbours by eps = 0.01.",
+        "parametric_provenance": "COMPOSED, NOT SOURCED — intent-presets.md left §8.6 (decor-organic) as an unwritten placeholder (\"INTENT PRESET: DECOR / ORGANIC. …\"). This block was written by the P3 implementer from §6.5's content, in the same instructional register as the other four (verbatim) blocks. Do not treat it as pinned vault research — it has not been reviewed as such."
+      }
+    }
+  ],
+  "conflict_notes": [
+    {
+      "when": [
+        "miniature",
+        "strong"
+      ],
+      "note": "Strong raises the minimum feature to 1.0 mm — sculpted detail below that will be merged or omitted."
+    },
+    {
+      "when": [
+        "prototype",
+        "strong"
+      ],
+      "note": "Prototype keeps Strong's wall thickness but coarsens curves and drops infill — strength results will read low."
+    },
+    {
+      "when": [
+        "decor-organic",
+        "strong"
+      ],
+      "note": "Strong forces the parametric track; the generator is disabled for load-bearing parts."
+    },
+    {
+      "when": [
+        "decor-organic",
+        "fits-hardware"
+      ],
+      "note": "Sculpt first, then branch the checkpoint and difference() the mating features into the import."
+    }
+  ],
+  "exclusive_pair_note": "Prototype replaces Miniature.",
+  "_dropped_knobs": [
+    "mesh --octree — no such flag on this CLI (config.toml value only); every generated preset above omits it.",
+    "prep --flat-cut face selection — the flag exists but run_prep_stage hardcodes plane_normal=(0,1,0); decor-organic ships the millimetres and a flat_cut_caveat string instead of claiming -Z.",
+    "print --profile / the entire print pipeline stage — inert on this machine (no profile JSON on disk, --load-settings absent, \"print\" not in PIPELINE_ACTIONS). slicer_profile stays in params as inert data for a later wave."
+  ],
+  "_note": "Overridable by a same-named file in app.getPath(userData)/presets/ (main/presets.js presets:load)."
+}

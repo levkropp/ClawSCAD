@@ -1,0 +1,369 @@
+/* style-categories.css — P8 (guided UI). Owned exclusively by the guided
+   package. Linked AFTER style-composer.css so equal-specificity rules that
+   demote #composer-targets win. Use the existing :root tokens from style.css;
+   any new token goes in a :root block here, next to its consumers.
+
+   The release's whole visual argument is here: "What are you making?" is the
+   primary control in the rail, and everything that used to be a decision
+   (Output, the fine-tune chips) drops to a confirmation caption underneath.
+   Demotion is type scale, weight and colour ONLY — nothing is hidden,
+   reparented, zero-height or faded, because three specs click those buttons.
+
+   Contrast (WCAG relative luminance, computed against the ACTUAL background
+   each token sits on in this file):
+     --fg          (#c8c8dc) on --category-tile-on (#16203c) = 8.94:1  selected tile label
+     --fg-secondary(#9a9ac4) on --surface-2        (#0d0d1a) = 7.15:1  unselected tile label
+     --accent-label(#7f9fdd) on --surface-1        (#0a0a18) = 7.63:1  captions, the note headline
+     --fg-muted    (#7f7fae) on --surface-2        (#0d0d1a) = 5.09:1  Output row, ask labels
+     --accent-hover(#66a0ff) on --surface-1        (#0a0a18) = 7.26:1  the override text button
+   All five clear AA's 4.5:1 floor; four clear AAA's 7:1. */
+
+:root {
+  --category-tile-bg: var(--surface-2);
+  --category-tile-on: #16203c;      /* selected tile wash — same family as the checkpoint "active" wash */
+  --category-glyph-size: 18px;      /* the contract's drawn size */
+  --category-tile-min-h: 46px;      /* 4 rows of these have to fit above the prompt */
+}
+
+/* The composer shipped at 340px, sized for a target row + a textarea. The
+   grid is four rows taller than that row was, and at 340px focusing the
+   prompt scrolls the question "What are you making?" clean off the top —
+   the one control this release is judged on. Raised here, in P8's own file,
+   rather than by editing style-composer.css.
+   Safe by construction: #composer's own max-height:60% still caps it, the
+   rail splitter still overrides it, a persisted inline height still wins,
+   and #terminal-pane-0's min-height floor is untouched. */
+#composer {
+  height: 480px;
+}
+
+/* ── the guided slot ──────────────────────────────────────────────────── */
+
+#composer-guided {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  flex-shrink: 0;
+}
+
+#composer-guided:empty {
+  display: none;
+}
+
+/* The human question, asked in plain words, at the top of the rail. This is
+   the largest piece of type in the composer for a reason. */
+#category-heading {
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+
+#category-load-error {
+  font-size: var(--text-meta);
+  color: var(--warn);
+  line-height: 1.4;
+}
+
+#category-load-error[hidden] {
+  display: none;
+}
+
+/* ── the print-type grid ──────────────────────────────────────────────── */
+
+#category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s1);
+}
+
+#category-grid[hidden] {
+  display: none;
+}
+
+/* Never disabled, never faded — a tile is always pressable. */
+.category-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--category-tile-min-h);
+  padding: 5px 4px;
+  background: var(--category-tile-bg);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  color: var(--fg-secondary);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  text-align: center;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.category-glyph {
+  font-size: var(--category-glyph-size);
+  line-height: 1;
+  /* Unselected glyphs read one step back without touching opacity — the
+     disabled/faded rule is absolute, and saturation is not opacity. */
+  filter: saturate(0.5);
+  transition: filter var(--t-fast) var(--ease);
+}
+
+.category-label {
+  font-size: var(--text-meta);
+  font-weight: 600;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.category-tile:hover {
+  background: var(--hover-wash);
+  border-color: var(--border-hover);
+  color: var(--fg);
+}
+
+.category-tile:hover .category-glyph {
+  filter: saturate(1);
+}
+
+.category-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Selected — background + border + colour, all three, on top of the
+   aria-checked that actually carries the state. */
+.category-tile[aria-checked="true"] {
+  background: var(--category-tile-on);
+  border-color: var(--accent);
+  color: var(--fg);
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+.category-tile[aria-checked="true"] .category-glyph {
+  filter: saturate(1.15);
+}
+
+/* ── the selected type's own questions ────────────────────────────────── */
+
+#category-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+}
+
+#category-ask[hidden],
+#category-ask:empty {
+  display: none;
+}
+
+.category-ask-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+}
+
+.category-ask-label {
+  white-space: nowrap;
+}
+
+.category-ask-input {
+  min-width: 0;
+  width: 74px;
+  padding: 3px var(--s1);
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-inline);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+}
+
+select.category-ask-input {
+  width: auto;
+  max-width: 122px;
+}
+
+input.category-ask-input[type="text"] {
+  width: 108px;
+}
+
+.category-ask-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.category-ask-input::placeholder {
+  color: var(--fg-faint);
+}
+
+/* Coloured, never faded — opacity stays 1 even if a field is ever disabled. */
+.category-ask-input:disabled {
+  opacity: 1;
+  color: var(--fg-disabled);
+  background: var(--surface-1);
+  border-color: var(--border-hairline);
+  cursor: not-allowed;
+}
+
+.category-ask-unit {
+  color: var(--fg-faint);
+  font-size: var(--text-chrome);
+}
+
+/* ── what happens next, in plain English, always overridable ──────────── */
+
+#route-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--surface-1);
+  border-radius: var(--r-inline);
+  box-shadow: inset 2px 0 0 var(--accent);
+  line-height: 1.4;
+}
+
+#route-note[data-route="confirm"] {
+  box-shadow: inset 2px 0 0 var(--cp-generated);
+}
+
+.route-note-text {
+  flex: 1 1 160px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--accent-label);
+}
+
+#route-note[data-route="confirm"] .route-note-text {
+  color: var(--cp-generated);
+}
+
+.route-note-override {
+  flex: 0 0 auto;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent-hover);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.route-note-override:hover {
+  color: var(--fg);
+}
+
+.route-note-override:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-inline);
+}
+
+.route-note-override[hidden] {
+  display: none;
+}
+
+.route-note-override:disabled {
+  opacity: 1;
+  color: var(--fg-disabled);
+  cursor: not-allowed;
+}
+
+.route-note-flag {
+  flex: 1 1 100%;
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+}
+
+.route-note-flag[hidden] {
+  display: none;
+}
+
+/* ── captions on the demoted controls ─────────────────────────────────── */
+/* Both are chrome labels in the same register as "What Claude will read":
+   uppercase, mono, 10px, tracked. They name what the row underneath is for
+   without asking the person to make a decision about it. */
+
+.guided-caption {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+  margin-top: var(--s1);
+  /* Pulls #composer-targets up under its own caption, against the
+     #composer-body row gap, so the caption reads as belonging to it. */
+  margin-bottom: -6px;
+}
+
+/* The fine-tune caption can't be a sibling element — #preset-chip-row lives
+   inside P3's own section, which P8 may not touch. Generated content from
+   this stylesheet is the one way to label it without reparenting anything.
+   .presets-section is a flex column, so ::before lands above the chip row. */
+.presets-section::before {
+  content: 'Fine-tune';
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* ── demotion: Output (was the first question, now a confirmation) ─────── */
+/* Visible and clickable, always — composer.spec.js clicks all three, and
+   presets.spec.js clicks two of them. Only the type scale, weight, colour
+   and footprint change. */
+
+#composer-targets {
+  align-self: flex-start;
+  border-color: var(--border-hairline);
+  border-radius: var(--r-inline);
+}
+
+.target-btn {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  border-right-color: var(--border-hairline);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+
+.target-btn[data-target="part"].is-selected {
+  background: #101a2f;
+  box-shadow: inset 0 -2px 0 0 var(--accent-dim);
+}
+
+.target-btn[data-target="sculpt"].is-selected,
+.target-btn[data-target="image"].is-selected {
+  background: #17142a;
+  box-shadow: inset 0 -2px 0 0 var(--cp-generated);
+}
+
+/* ── demotion: the fine-tune chips ────────────────────────────────────── */
+
+#preset-chip-row .preset-chip {
+  padding: 3px 7px;
+  font-size: var(--text-chrome);
+  font-weight: 500;
+}
+
+#preset-modifier-row {
+  gap: var(--s2);
+}
+
+#preset-modifier-row .preset-modifier-chip {
+  font-size: var(--text-chrome);
+}

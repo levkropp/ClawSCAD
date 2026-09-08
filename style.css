@@ -1,3 +1,95 @@
+/* ── Design tokens ───────────────────────────────────────────────────────
+   The file had no :root block and no custom properties at all — ~40 near
+   identical blue-greys were hand-typed, so the same conceptual colour had
+   several values depending on where it was written. These give each colour a
+   ROLE, and the text values are set at luminances that clear WCAG AA at the
+   size they're actually used: the worst offenders were the timestamps (1.42:1)
+   and the first-run empty state (1.67:1), i.e. functionally invisible.
+   W1-1 completed the swap — outside this block there should be no bare hex
+   except the low-alpha wash suffixes (#4488ff1a and friends), which encode a
+   colour AND an alpha and have no token form. */
+:root {
+  /* Surface ladder */
+  --surface-0: #08081a;          /* header, status bar */
+  --surface-1: #0a0a18;          /* docked panels */
+  --surface-2: #0d0d1a;          /* app ground, inputs */
+  --surface-3: #0e0e22;          /* floating: menus, dropdowns */
+  --surface-viewport: #10102a;   /* the 3D canvas — the one bright surface */
+  --surface-raised: #111130;     /* tooltip, active wash */
+  --grad-chrome: linear-gradient(180deg, #0e0e22, #08081a);
+  --grad-panel: linear-gradient(180deg, #0c0c1e, #0a0a18);
+
+  /* Borders, by intent */
+  --border-hairline: #141430;
+  --border-panel: #1e1e40;
+  --border-control: #2a2a55;
+  --border-hover: #3c3c7a;
+  --border-accent: #4a6ec0;
+
+  /* Text ladder — contrast quoted against --surface-1 */
+  --fg: #c8c8dc;            /* 11.5:1 primary */
+  --fg-secondary: #9a9ac4;  /*  7.0:1 inactive checkpoint labels */
+  --fg-muted: #7f7fae;      /*  4.9:1 status + secondary metadata */
+  --fg-faint: #6a6a98;      /*  3.6:1 timestamps, tree rail (decorative, >=10px) */
+  --fg-disabled: #4a4a70;
+
+  /* Accents: two, plus semantics */
+  --accent: #4488ff;
+  --accent-hover: #66a0ff;
+  --accent-dim: #2c5599;
+  --accent-label: #7f9fdd;  /*  6.2:1 uppercase chrome labels */
+  --geometry: #44cc77;      /*  9.4:1 render / export / success */
+  --geometry-hover: #66ff99;
+  --scad: #50fa7b;          /* .scad filenames only */
+  --warn: #f0a63c;
+  --danger: #ff6b6b;        /* was #cc4444 = 3.9:1 */
+  --danger-surface: #2a1010;
+
+  /* Checkpoint kinds — mesh-derived checkpoints read differently */
+  --cp-generated: #b07cff;
+  --cp-discovered: var(--warn);
+  --cp-broken: var(--danger);
+
+  --hover-wash: #151538;
+  --active-wash: #17173c;
+
+  /* Type */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", Menlo, Monaco, monospace;
+  --text-chrome: 10px;
+  --text-meta: 11px;
+  --text-body: 12px;
+  --text-ui: 13px;
+  --text-title: 14px;
+  --text-display: 22px;
+  --track-chrome: 0.08em;
+
+  /* Space — 4px base, six steps */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+
+  /* Radii by component class */
+  --r-inline: 4px; --r-control: 6px; --r-panel: 8px; --r-modal: 10px;
+
+  /* Elevation */
+  --e-floating: 0 8px 24px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04);
+  --e-overlay:  0 16px 48px rgba(0,0,0,.7),  0 0 0 1px rgba(255,255,255,.05);
+
+  /* Motion */
+  --t-fast: 90ms;
+  --t-base: 150ms;
+  --t-slow: 240ms;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  /* z-index scale (replaces ad-hoc 10/11/15/20/100/200/300/1000) */
+  --z-canvas-chrome: 10;
+  --z-panel-float: 20;
+  --z-overlay: 30;
+  --z-popover: 100;
+  --z-tooltip: 200;
+  --z-context: 300;
+  --z-toast: 1000;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -7,11 +99,45 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  background: #0d0d1a;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #c0c0d0;
+  background: var(--surface-2);
+  font-family: var(--font-ui);
+  color: var(--fg);
   user-select: none;
-  font-size: 13px;
+  font-size: var(--text-ui);
+  /* Brand-mandated, and it stops the render timer and timestamps jittering. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* body has user-select:none, which also made source code, logs, tooltips and
+   paths uncopyable — in a tool whose whole job is producing code. Opt those
+   back in. */
+#editor-container,
+.gen-log,
+#cp-tooltip,
+.prop-val,
+#workspace-path,
+.overlay-fault-detail,
+.vp2-editor-content,
+#composer-preamble,
+#composer-prompt,
+.file-chip,
+#gallery-detail {
+  user-select: text;
+}
+
+/* There was not one :focus-visible rule in the file, against six `outline:none`
+   declarations — the app had no visible keyboard focus anywhere. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
 }
 
 body.dragging * {
@@ -32,25 +158,163 @@ body.dragging #splitter {
   width: 100vw;
 }
 
+/* ── Shared chrome ─────────────────────────────────────────────────────
+   One panel-header rule instead of six near-identical blocks at two
+   different heights, and one .label rule instead of eight copies (two of
+   which had silently lost their letter-spacing). JetBrains Mono on the
+   label is what makes the chrome read as instrument rather than web page. */
+
+.panel-header {
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  background: var(--grad-panel);
+  border-bottom: 1px solid var(--border-hairline);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+}
+
+.panel-header .label,
+#status-bar .label {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--accent-label);
+}
+
+.panel-header .spacer,
+#status-bar .spacer {
+  flex: 1;
+}
+
+/* ── Button state contract ─────────────────────────────────────────────
+   Six button families each invented their own states. .btn is added
+   ALONGSIDE the existing class names — never renaming them, because all
+   three Playwright suites assert .preset-btn / .small-btn / render-btn /
+   .menu-item / .ctx-item. `transition: all` is gone from every one of them:
+   it animates layout over a live WebGL canvas. */
+
+.btn {
+  font-family: var(--font-ui);
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  border-radius: var(--r-inline);
+  cursor: pointer;
+}
+
+/* The existing class names are never renamed — all three Playwright suites
+   assert them — so the contract is applied to them by selector instead. */
+.btn,
+.toolbar-btn,
+.preset-btn,
+.small-btn,
+.header-btn,
+.path-btn {
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+}
+
+.btn:hover,
+.toolbar-btn:hover,
+.preset-btn:hover,
+.small-btn:hover,
+.header-btn:hover,
+.path-btn:hover {
+  background: var(--hover-wash);
+  color: var(--fg);
+  border-color: var(--border-hover);
+}
+
+.btn:active,
+.toolbar-btn:active,
+.preset-btn:active,
+.small-btn:active,
+.header-btn:active,
+.path-btn:active {
+  background: var(--surface-0);
+}
+
+.btn:focus-visible,
+.toolbar-btn:focus-visible,
+.preset-btn:focus-visible,
+.small-btn:focus-visible,
+.header-btn:focus-visible,
+.path-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn.active,
+.toolbar-btn.active,
+.small-btn.active,
+.header-btn.active,
+.btn[aria-pressed="true"],
+.toolbar-btn[aria-pressed="true"],
+.small-btn[aria-pressed="true"] {
+  background: #4488ff1a;
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+/* Fading an already-3.5:1 label to opacity .4 lands it at ~1.6:1 — that is
+   how a disabled control becomes an invisible one. Colour it instead. */
+.btn:disabled,
+.toolbar-btn:disabled,
+.preset-btn:disabled,
+.small-btn:disabled,
+.header-btn:disabled {
+  opacity: 1;
+  color: var(--fg-disabled);
+  background: var(--surface-1);
+  border-color: var(--border-hairline);
+  cursor: not-allowed;
+}
+
+.btn.is-loading {
+  color: transparent;
+  pointer-events: none;
+  position: relative;
+}
+
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-dim);
+  border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+
 /* ── Header ────────────────────────────────────────────────────────── */
 
 #app-header {
   height: 36px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #0e0e22, #08081a);
-  border-bottom: 1px solid #1a1a3a;
+  background: var(--grad-chrome);
+  border-bottom: 1px solid var(--border-panel);
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  gap: 12px;
+  padding: 0 var(--s4);
+  gap: var(--s3);
   -webkit-app-region: drag;
   position: relative;
 }
 
 .brand-btn {
-  font-size: 14px;
+  font-size: var(--text-title);
   font-weight: 600;
-  color: #4488ff;
+  color: var(--accent);
   letter-spacing: 0.5px;
   background: none;
   border: none;
@@ -58,17 +322,16 @@ body.dragging #splitter {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-inline);
   font-family: inherit;
   -webkit-app-region: no-drag;
-  transition: background 0.1s;
+  transition: background var(--t-fast) var(--ease);
 }
 
 .brand-btn:hover {
-  background: #1a1a3a;
+  background: var(--hover-wash);
 }
-
 
 .brand-btn svg {
   width: 10px;
@@ -81,14 +344,14 @@ body.dragging #splitter {
 #app-menu {
   position: absolute;
   top: 100%;
-  left: 8px;
+  left: var(--s2);
   width: 240px;
-  background: #0e0e22;
-  border: 1px solid #1a1a3a;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  z-index: 200;
-  padding: 4px 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+  z-index: var(--z-tooltip);
+  padding: var(--s1) 0;
   -webkit-app-region: no-drag;
 }
 
@@ -102,36 +365,37 @@ body.dragging #splitter {
   padding: 7px 14px;
   border: none;
   background: transparent;
-  color: #8888bb;
-  font-size: 12px;
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
   font-family: inherit;
 }
 
 .menu-item:hover {
-  background: #1a1a3a;
-  color: #c0c0e0;
+  background: var(--hover-wash);
+  color: var(--fg);
 }
 
 .menu-shortcut {
   float: right;
-  color: #444466;
-  font-size: 10px;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  color: var(--fg-faint);
+  font-size: var(--text-chrome);
+  font-family: var(--font-mono);
 }
 
 .menu-divider {
   height: 1px;
-  background: #1a1a3a;
-  margin: 4px 0;
+  background: var(--border-panel);
+  margin: var(--s1) 0;
 }
 
 #app-header .separator {
   width: 1px;
   height: 14px;
-  background: #222244;
+  background: var(--border-control);
 }
 
 .header-export-group {
@@ -141,24 +405,24 @@ body.dragging #splitter {
 }
 
 .header-btn {
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid #222244;
-  background: rgba(15, 15, 30, 0.8);
-  color: #5566aa;
-  font-size: 10px;
+  padding: 3px var(--s2);
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--text-chrome);
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.1s;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.5px;
   -webkit-app-region: no-drag;
 }
 
-.header-btn:hover {
-  background: #1a1a3a;
-  color: #8899cc;
-  border-color: #333366;
+/* .3mf is the deliverable standard — the default export reads as the default. */
+.header-btn.is-default {
+  color: var(--geometry);
+  border-color: var(--geometry);
+  background: #44cc7714;
 }
 
 .path-btn {
@@ -167,11 +431,11 @@ body.dragging #splitter {
   gap: 6px;
   padding: 3px 10px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--r-inline);
   background: none;
-  color: #444466;
-  font-size: 11px;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  color: var(--fg-muted);
+  font-size: var(--text-meta);
+  font-family: var(--font-mono);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -179,13 +443,6 @@ body.dragging #splitter {
   max-width: 500px;
   flex: 1;
   -webkit-app-region: no-drag;
-  transition: all 0.1s;
-}
-
-.path-btn:hover {
-  border-color: #222244;
-  background: #0e0e22;
-  color: #6677aa;
 }
 
 .path-btn svg {
@@ -195,19 +452,90 @@ body.dragging #splitter {
   opacity: 0.5;
 }
 
+/* ── Environment banners ───────────────────────────────────────────────
+   One 28px strip under the header, at most one banner at a time, priority
+   OpenSCAD > Claude CLI > claw-gen. Two severities, not one: a missing
+   OpenSCAD kills the core loop, a missing claw-gen disables one optional
+   feature, and painting both amber says those are the same size of problem. */
+
+#env-banners {
+  flex-shrink: 0;
+}
+
+#env-banners:empty {
+  display: none;
+}
+
+.env-banner {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  font-size: var(--text-meta);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.env-banner .label {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  font-weight: 700;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+}
+
+.env-banner .spacer { flex: 1; }
+
+.env-banner.blocking {
+  background: #ff6b6b1a;
+  color: var(--danger);
+}
+
+.env-banner.degraded {
+  background: #f0a63c1a;
+  color: var(--warn);
+}
+
+/* ── Claude nudge card ─────────────────────────────────────────────────
+   Was a blind write into the pty 2s after a failure — the comment claimed it
+   only fired when Claude was idle but no idle check existed, so it could
+   splice into a half-typed line. Now it asks. */
+
+#nudge-card {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-hairline);
+  box-shadow: inset 2px 0 0 var(--warn);
+  font-size: var(--text-meta);
+  color: var(--fg-secondary);
+}
+
+#nudge-card.hidden { display: none; }
+
+#nudge-card .nudge-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Workspace Dropdown ────────────────────────────────────────────── */
 
 #workspace-dropdown {
   position: absolute;
   top: 100%;
-  right: 16px;
+  right: var(--s4);
   left: 200px;
   max-width: 500px;
-  background: #0e0e22;
-  border: 1px solid #1a1a3a;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  z-index: 200;
+  background: var(--surface-3);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+  z-index: var(--z-tooltip);
   overflow: hidden;
   -webkit-app-region: no-drag;
 }
@@ -216,41 +544,42 @@ body.dragging #splitter {
 
 .ws-input-row {
   display: flex;
-  padding: 8px;
+  padding: var(--s2);
   gap: 6px;
 }
 
 .ws-input-row input {
   flex: 1;
-  padding: 5px 8px;
-  border: 1px solid #222244;
-  border-radius: 4px;
-  background: #0a0a18;
-  color: #b0b0d0;
-  font-size: 12px;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  padding: 5px var(--s2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-inline);
+  background: var(--surface-1);
+  color: var(--fg);
+  font-size: var(--text-body);
+  font-family: var(--font-mono);
   outline: none;
 }
 
-.ws-input-row input:focus { border-color: #4466aa; }
+.ws-input-row input:focus { border-color: var(--border-accent); }
 
 .ws-input-row button {
-  padding: 5px 12px;
-  border-radius: 4px;
-  border: 1px solid #333366;
-  background: #1a1a3a;
-  color: #4488ff;
-  font-size: 11px;
+  padding: 5px var(--s3);
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-hover);
+  background: var(--hover-wash);
+  color: var(--accent);
+  font-size: var(--text-meta);
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
 }
 
 .ws-input-row button:hover {
-  background: #222255;
+  background: var(--surface-3);
+  border-color: var(--border-accent);
 }
 
-.ws-divider { height: 1px; background: #1a1a3a; }
+.ws-divider { height: 1px; background: var(--border-panel); }
 
 #ws-recent-list, #ws-browser-list {
   max-height: 240px;
@@ -260,29 +589,36 @@ body.dragging #splitter {
 .ws-recent-item, .ws-file-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: var(--s2);
+  padding: 6px var(--s3);
   cursor: pointer;
-  font-size: 11px;
-  color: #7777aa;
-  transition: background 0.1s;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  transition: background var(--t-fast) var(--ease);
+  font-family: var(--font-mono);
 }
 
 .ws-recent-item:hover, .ws-file-item:hover {
-  background: #151538;
-  color: #b0b0d0;
+  background: var(--hover-wash);
+  color: var(--fg);
 }
 
-.ws-file-item.dir { color: #4488ff; }
-.ws-file-item.scad { color: #50fa7b; }
+.ws-file-item.dir { color: var(--accent); }
+.ws-file-item.scad { color: var(--scad); }
+
+.ws-empty {
+  padding: var(--s3);
+  color: var(--fg-muted);
+  font-size: var(--text-meta);
+  text-align: center;
+}
 
 #ws-browser-path {
-  padding: 6px 12px;
-  font-size: 10px;
-  color: #444466;
-  border-bottom: 1px solid #111130;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  padding: 6px var(--s3);
+  font-size: var(--text-chrome);
+  color: var(--fg-faint);
+  border-bottom: 1px solid var(--border-hairline);
+  font-family: var(--font-mono);
 }
 
 #ws-file-browser.hidden { display: none; }
@@ -295,14 +631,27 @@ body.dragging #splitter {
   min-height: 0;
 }
 
-/* ── Left Panel ────────────────────────────────────────────────────── */
+/* ── Left Panel ────────────────────────────────────────────────────────
+   The viewport is the product; the terminal is the input. 1.5 : 1 says so.
+   Before this, editor + generate + checkpoints could each claim their own
+   max-height (50% + 45% + 25% = 120%) and collapse the viewport to its 200px
+   floor — #workbench caps all three together at 55%. */
 
 #left-panel {
-  flex: 1;
+  flex: 1.5;
   display: flex;
   flex-direction: column;
   min-width: 250px;
   min-height: 0;
+}
+
+#workbench {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  max-height: 55%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Viewports Container ───────────────────────────────────────────── */
@@ -316,32 +665,37 @@ body.dragging #splitter {
 .viewport-pane {
   flex: 1;
   overflow: hidden;
-  background: #10102a;
+  background: var(--surface-viewport);
   position: relative;
   outline: none;
   min-width: 150px;
 }
 
 .viewport-pane + .viewport-pane {
-  border-left: 2px solid #222244;
+  border-left: 2px solid var(--border-control);
+}
+
+.viewport-pane:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .viewport-pane.focused {
-  box-shadow: inset 0 0 0 1px #4466aa44;
+  box-shadow: inset 0 0 0 1px var(--border-accent);
 }
 
 .viewport-close-btn {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 11;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  border: 1px solid #333355;
-  background: rgba(10, 10, 26, 0.85);
-  color: #666688;
-  font-size: 12px;
+  top: var(--s1);
+  left: var(--s1);
+  z-index: var(--z-canvas-chrome);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-control);
+  background: var(--surface-1);
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -350,9 +704,9 @@ body.dragging #splitter {
 }
 
 .viewport-close-btn:hover {
-  background: rgba(40, 10, 10, 0.9);
-  color: #cc4444;
-  border-color: #553333;
+  background: var(--danger-surface);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 /* ── Viewport 2 Column ─────────────────────────────────────────────── */
@@ -363,7 +717,7 @@ body.dragging #splitter {
   flex-direction: column;
   min-width: 200px;
   min-height: 0;
-  border-left: 1px solid #1a1a3a;
+  border-left: 1px solid var(--border-panel);
 }
 
 .viewport-column .viewport-pane {
@@ -371,59 +725,70 @@ body.dragging #splitter {
   min-height: 120px;
 }
 
+/* Splitter hit-target parity with #splitter: 5px of paint, 13px of grab. */
 .splitter-v {
   width: 5px;
-  background: #111130;
+  background: var(--surface-raised);
   cursor: col-resize;
   flex-shrink: 0;
+  position: relative;
+  transition: background var(--t-base) var(--ease);
 }
 
-.splitter-v:hover { background: #4466cc; }
+.splitter-v::after {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.splitter-v:hover { background: var(--accent-dim); }
 
 .vp2-toolbar-left, .vp2-toolbar-right {
   position: absolute;
-  top: 8px;
+  top: var(--s2);
   display: flex;
   flex-direction: column;
   gap: 3px;
-  z-index: 10;
+  z-index: var(--z-canvas-chrome);
 }
 
-.vp2-toolbar-left { left: 8px; }
-.vp2-toolbar-right { right: 8px; }
+.vp2-toolbar-left { left: var(--s2); }
+.vp2-toolbar-right { right: var(--s2); }
 
 .vp2-view-presets {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
+  bottom: var(--s2);
+  left: var(--s2);
   display: flex;
   gap: 2px;
-  z-index: 10;
+  z-index: var(--z-canvas-chrome);
 }
 
 .vp2-status-bar {
   height: 22px;
-  background: #08081a;
-  border-top: 1px solid #1a1a3a;
+  background: var(--surface-0);
+  border-top: 1px solid var(--border-panel);
   display: flex;
   align-items: center;
-  padding: 0 8px;
-  font-size: 10px;
-  color: #505070;
-  gap: 8px;
+  padding: 0 var(--s2);
+  font-size: var(--text-chrome);
+  color: var(--fg-muted);
+  gap: var(--s2);
   flex-shrink: 0;
 }
 
 .vp2-status-bar .label {
-  color: #4466aa;
+  font-family: var(--font-mono);
+  color: var(--accent-label);
   font-weight: 700;
-  font-size: 9px;
+  letter-spacing: var(--track-chrome);
+  font-size: var(--text-chrome);
   text-transform: uppercase;
 }
 
 .vp2-editor-panel {
-  border-top: 1px solid #1a1a3a;
-  background: #0a0a18;
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -436,39 +801,21 @@ body.dragging #splitter {
   max-height: 140px;
 }
 
-.vp2-editor-header {
-  height: 22px;
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  gap: 4px;
-  font-size: 10px;
-  color: #505070;
-  background: linear-gradient(180deg, #0c0c1e, #0a0a18);
-}
-
-.vp2-editor-header .label {
-  color: #4466aa;
-  font-weight: 700;
-  font-size: 9px;
-  text-transform: uppercase;
-}
-
 .vp2-editor-filename {
-  color: #444466;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 9px;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .vp2-editor-content {
-  padding: 4px 8px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  color: #8888bb;
-  background: #0a0a18;
+  padding: var(--s1) var(--s2);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--fg-secondary);
+  background: var(--surface-1);
   overflow: auto;
   max-height: 118px;
   white-space: pre;
@@ -477,8 +824,8 @@ body.dragging #splitter {
 }
 
 .vp2-checkpoint-panel {
-  border-top: 1px solid #1a1a3a;
-  background: #0a0a18;
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
   flex-shrink: 0;
   max-height: 30%;
   min-height: 22px;
@@ -490,28 +837,9 @@ body.dragging #splitter {
   display: none;
 }
 
-.vp2-checkpoint-header {
-  height: 22px;
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  gap: 4px;
-  font-size: 10px;
-  color: #505070;
-  background: linear-gradient(180deg, #0c0c1e, #0a0a18);
-  flex-shrink: 0;
-}
-
-.vp2-checkpoint-header .label {
-  color: #4466aa;
-  font-weight: 700;
-  font-size: 9px;
-  text-transform: uppercase;
-}
-
 .vp2-checkpoint-tree {
   overflow-y: auto;
-  padding: 4px 0;
+  padding: var(--s1) 0;
   flex: 1;
 }
 
@@ -522,7 +850,7 @@ body.dragging #splitter {
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 20;
+  z-index: var(--z-panel-float);
 }
 
 .vp2-render-overlay.visible {
@@ -537,50 +865,37 @@ body.dragging #splitter {
 
 #viewport-toolbar-right {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: var(--s3);
+  right: var(--s3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  z-index: 10;
+  gap: var(--s1);
+  z-index: var(--z-canvas-chrome);
 }
 
 #viewport-toolbar-left {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: var(--s3);
+  left: var(--s3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  z-index: 10;
+  gap: var(--s1);
+  z-index: var(--z-canvas-chrome);
 }
 
 .toolbar-btn {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
-  border: 1px solid #222244;
-  background: rgba(10, 10, 26, 0.85);
-  color: #6666aa;
+  border-radius: var(--r-control);
+  border: 1px solid var(--border-control);
+  background: var(--surface-1);
+  color: var(--fg-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 5px;
-  transition: all 0.15s;
   backdrop-filter: blur(8px);
-}
-
-.toolbar-btn:hover {
-  background: rgba(20, 20, 50, 0.95);
-  color: #8888cc;
-  border-color: #333366;
-}
-
-.toolbar-btn.active {
-  background: rgba(40, 40, 100, 0.85);
-  color: #4488ff;
-  border-color: #4466aa;
 }
 
 .toolbar-btn svg {
@@ -590,22 +905,22 @@ body.dragging #splitter {
 
 /* Render button — visually distinct, text label */
 .render-btn {
-  color: #44cc77;
-  border-color: #2a5a3a;
-  background: rgba(10, 26, 18, 0.9);
-  margin-bottom: 8px;
+  color: var(--geometry);
+  border-color: var(--geometry);
+  background: #0e1e18;
+  margin-bottom: var(--s2);
 }
 
 .render-btn:hover {
-  color: #66ff99;
-  border-color: #44aa66;
-  background: rgba(20, 50, 35, 0.95);
+  color: var(--geometry-hover);
+  border-color: var(--geometry-hover);
+  background: #14301f;
 }
 
 .render-text-btn {
   width: auto;
   padding: 5px 10px;
-  font-size: 10px;
+  font-size: var(--text-chrome);
   font-weight: 700;
   font-family: inherit;
   letter-spacing: 0.5px;
@@ -615,16 +930,16 @@ body.dragging #splitter {
 
 #part-props {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: var(--s3);
+  right: var(--s3);
   width: 260px;
-  background: rgba(10, 10, 26, 0.92);
-  border: 1px solid #2a2a5a;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 15;
+  background: var(--surface-1);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+  z-index: var(--z-panel-float);
   backdrop-filter: blur(8px);
-  font-size: 11px;
+  font-size: var(--text-meta);
   overflow: hidden;
 }
 
@@ -635,40 +950,42 @@ body.dragging #splitter {
 #part-props-header {
   display: flex;
   align-items: center;
-  padding: 8px 10px;
-  border-bottom: 1px solid #1a1a3a;
-  gap: 4px;
+  padding: var(--s2) 10px;
+  border-bottom: 1px solid var(--border-hairline);
+  gap: var(--s1);
 }
 
 #part-props-title {
   flex: 1;
   font-weight: 600;
-  color: #b0b0d0;
-  font-size: 12px;
+  color: var(--fg);
+  font-size: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 20x20 was under the 24px desktop hit-target minimum. */
 #part-props-header button {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
-  color: #5566aa;
+  color: var(--fg-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  font-size: 14px;
+  font-size: var(--text-title);
   border-radius: 3px;
-  transition: all 0.1s;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
 }
 
 #part-props-header button:hover {
-  background: #1a1a3a;
-  color: #8899cc;
+  background: var(--hover-wash);
+  color: var(--fg);
 }
 
 #part-props-header button svg {
@@ -677,14 +994,14 @@ body.dragging #splitter {
 }
 
 #part-props-body {
-  padding: 8px 10px;
+  padding: var(--s2) 10px;
 }
 
 .prop-row {
   display: flex;
   justify-content: space-between;
   padding: 3px 0;
-  border-bottom: 1px solid #111130;
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .prop-row:last-child {
@@ -692,22 +1009,22 @@ body.dragging #splitter {
 }
 
 .prop-key {
-  color: #666688;
+  color: var(--fg-secondary);
 }
 
 .prop-val {
-  color: #b0b0d0;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
-  font-size: 10px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
   text-align: right;
 }
 
 .prop-color-input {
   width: 48px;
   height: 22px;
-  border: 1px solid #222244;
+  border: 1px solid var(--border-control);
   border-radius: 3px;
-  background: #0d0d1a;
+  background: var(--surface-2);
   cursor: pointer;
   padding: 1px;
 }
@@ -716,13 +1033,13 @@ body.dragging #splitter {
 .prop-color-input::-webkit-color-swatch { border: none; border-radius: 2px; }
 
 .prop-val.highlight {
-  color: #50fa7b;
+  color: var(--scad);
   font-weight: 600;
 }
 
 #part-props-settings {
-  padding: 8px 10px;
-  border-top: 1px solid #1a1a3a;
+  padding: var(--s2) 10px;
+  border-top: 1px solid var(--border-hairline);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -736,59 +1053,52 @@ body.dragging #splitter {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #666688;
-  font-size: 10px;
+  color: var(--fg-secondary);
+  font-size: var(--text-chrome);
 }
 
 #part-props-settings input,
 #part-props-settings select {
   width: 100px;
   padding: 2px 6px;
-  border: 1px solid #222244;
+  border: 1px solid var(--border-control);
   border-radius: 3px;
-  background: #0d0d1a;
-  color: #b0b0d0;
-  font-size: 10px;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: var(--text-chrome);
+  font-family: var(--font-mono);
   outline: none;
 }
 
 #part-props-settings input:focus,
 #part-props-settings select:focus {
-  border-color: #4466aa;
+  border-color: var(--border-accent);
 }
 
 /* ── View Presets ──────────────────────────────────────────────────── */
 
 #view-presets {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
+  bottom: var(--s3);
+  left: var(--s3);
   display: flex;
   gap: 3px;
-  z-index: 10;
+  z-index: var(--z-canvas-chrome);
 }
 
 .preset-btn {
   height: 24px;
-  padding: 0 8px;
-  border-radius: 4px;
-  border: 1px solid #222244;
-  background: rgba(10, 10, 26, 0.85);
-  color: #5555aa;
-  font-size: 10px;
+  padding: 0 var(--s2);
+  border-radius: var(--r-inline);
+  border: 1px solid var(--border-control);
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  font-size: var(--text-chrome);
   font-weight: 600;
   letter-spacing: 0.3px;
   cursor: pointer;
-  transition: all 0.15s;
   backdrop-filter: blur(8px);
   font-family: inherit;
-}
-
-.preset-btn:hover {
-  background: rgba(30, 30, 60, 0.95);
-  color: #8888cc;
-  border-color: #333366;
 }
 
 /* ── Render Overlay ────────────────────────────────────────────────── */
@@ -800,10 +1110,10 @@ body.dragging #splitter {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 20;
+  z-index: var(--z-overlay);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--t-slow) var(--ease);
   backdrop-filter: blur(4px);
 }
 
@@ -816,14 +1126,14 @@ body.dragging #splitter {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: var(--s4);
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #1a1a44;
-  border-top-color: #4488ff;
+  border: 3px solid var(--border-control);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -833,61 +1143,171 @@ body.dragging #splitter {
 }
 
 .overlay-text {
-  font-size: 14px;
-  color: #8888bb;
+  font-size: var(--text-title);
+  color: var(--fg-secondary);
   font-weight: 500;
 }
 
 .overlay-time {
-  font-size: 24px;
+  font-size: var(--text-display);
   font-weight: 300;
-  color: #4466aa;
+  color: var(--accent-label);
   font-variant-numeric: tabular-nums;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  font-family: var(--font-mono);
 }
 
+/* The bar is a SHIMMER, not a percentage: nothing in the app knows how far
+   through an OpenSCAD compile it is, and .bar-fill was never driven by any
+   signal. It stays in the DOM — app.spec.js asserts it is attached. */
 .overlay-bar {
   width: 200px;
   height: 3px;
-  background: #1a1a3a;
+  background: var(--border-panel);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .bar-fill {
-  width: 30%;
+  width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, #4488ff, #6644cc);
   border-radius: 2px;
-  animation: indeterminate 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--accent) 45%, var(--accent-hover) 55%, transparent 100%);
+  background-size: 220% 100%;
+  animation: shimmer 1.5s var(--ease) infinite;
 }
 
-@keyframes indeterminate {
-  0% { transform: translateX(-100%); width: 30%; }
-  50% { transform: translateX(150%); width: 50%; }
-  100% { transform: translateX(500%); width: 30%; }
+@keyframes shimmer {
+  0%   { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+/* Failure detail — persistent and scrollable. The previous treatment truncated
+   the error to 120 chars, put it in the 24px timer element, and deleted the
+   whole overlay after 5s with no way to get it back. */
+.overlay-fault {
+  width: min(560px, 70vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: var(--s1);
+}
+
+.overlay-fault[hidden] {
+  display: none;
+}
+
+.overlay-fault-detail {
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px var(--s3);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-control);
+  background: var(--surface-0);
+  color: var(--fg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
+.overlay-fault-actions {
+  display: flex;
+  gap: var(--s2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* An error state must not keep animating a progress bar behind it. */
+#render-overlay.is-error .spinner,
+#render-overlay.is-error .overlay-bar {
+  display: none;
+}
+
+/* W4-1: the fault state stops being a scrim, because the previous model now
+   stays in the scene during a re-render. An opaque overlay would cancel that
+   gain exactly when comparison matters most. The card anchors bottom-right and
+   the viewport keeps orbit/zoom; #render-overlay and all four children that
+   app.spec.js asserts stay exactly where they are. */
+#render-overlay.is-error {
+  background: transparent;
+  backdrop-filter: none;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: var(--s3);
+  pointer-events: none;
+}
+
+#render-overlay.is-error .overlay-content {
+  pointer-events: auto;
+  align-items: stretch;
+  width: min(520px, 60%);
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-panel);
+  border-left: 2px solid var(--danger);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+}
+
+#render-overlay.is-error .overlay-text {
+  font-size: var(--text-body);
+  color: var(--fg);
+}
+
+#render-overlay.is-error .overlay-fault {
+  width: auto;
+}
+
+/* Fault class as a left accent bar — same language as .cp-node.active. */
+#render-overlay.is-error.fault-timeout .overlay-content,
+#render-overlay.is-error.fault-environment .overlay-content {
+  border-left-color: var(--warn);
 }
 
 /* ── Status Bar ────────────────────────────────────────────────────── */
 
 #status-bar {
   height: 26px;
-  background: linear-gradient(180deg, #0c0c1e, #08081a);
-  border-top: 1px solid #1a1a3a;
+  background: var(--grad-chrome);
+  border-top: 1px solid var(--border-panel);
   display: flex;
   align-items: center;
-  padding: 0 12px;
-  font-size: 11px;
-  color: #505070;
-  gap: 12px;
+  padding: 0 var(--s3);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  gap: var(--s3);
   flex-shrink: 0;
 }
 
-#status-bar .spacer { flex: 1; }
+/* active.scad is the one file a user is most likely to open by hand, and
+   nothing in the app ever explained it. */
+#active-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  color: var(--fg-faint);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-inline);
+  padding: 1px 6px;
+  cursor: default;
+}
+
+#active-chip.hidden { display: none; }
+
+#active-chip strong {
+  color: var(--fg-secondary);
+  font-weight: 600;
+}
 
 #color-swatches {
   display: flex;
-  gap: 4px;
+  gap: var(--s1);
   align-items: center;
 }
 
@@ -897,7 +1317,8 @@ body.dragging #splitter {
   border-radius: 3px;
   border: 1px solid rgba(255,255,255,0.1);
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
 }
 
 .swatch:hover {
@@ -918,23 +1339,15 @@ body.dragging #splitter {
   pointer-events: auto;
 }
 
-#status-bar .label {
-  color: #4466aa;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
 /* ── Editor Panel ──────────────────────────────────────────────────── */
 
 #editor-panel {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid #1a1a3a;
-  background: #0a0a18;
-  transition: height 0.2s ease;
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
+  transition: height var(--t-base) var(--ease);
   overflow: hidden;
 }
 
@@ -948,52 +1361,36 @@ body.dragging #splitter {
   max-height: 50%;
 }
 
-#editor-header {
-  height: 26px;
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  font-size: 11px;
-  color: #505070;
-  background: linear-gradient(180deg, #0c0c1e, #0a0a18);
-  border-bottom: 1px solid #111130;
-  flex-shrink: 0;
-  gap: 6px;
-}
-
-#editor-header .label {
-  color: #4466aa;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-#editor-header .spacer {
-  flex: 1;
-}
-
 #editor-filename {
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
-  font-size: 10px;
-  color: #444466;
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  color: var(--fg-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Say the rule where the rule can be broken. */
+#editor-immutable-hint {
+  font-size: var(--text-chrome);
+  color: var(--warn);
+  font-family: var(--font-mono);
+}
+
+#editor-immutable-hint.hidden { display: none; }
+
 #editor-toggle {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
-  color: #4466aa;
+  color: var(--accent-label);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: transform 0.2s;
+  transition: transform var(--t-base) var(--ease);
 }
 
 #editor-toggle svg {
@@ -1006,32 +1403,26 @@ body.dragging #splitter {
 }
 
 .small-btn {
-  padding: 2px 8px;
+  padding: 2px var(--s2);
   border-radius: 3px;
-  border: 1px solid #222244;
-  background: rgba(20, 20, 40, 0.8);
-  color: #5566aa;
-  font-size: 10px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--text-chrome);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
   font-family: inherit;
-}
-
-.small-btn:hover {
-  background: rgba(30, 30, 60, 0.9);
-  color: #7788cc;
-  border-color: #333366;
-}
-
-.small-btn.active {
-  background: rgba(40, 40, 100, 0.8);
-  color: #4488ff;
-  border-color: #4466aa;
 }
 
 .small-btn.hidden {
   display: none;
+}
+
+/* The setup-guide affordance is an <a> so it keeps its spec-asserted id. */
+a.small-btn {
+  display: inline-block;
+  text-decoration: none;
+  line-height: 16px;
 }
 
 #editor-container {
@@ -1042,42 +1433,22 @@ body.dragging #splitter {
 
 /* ── Checkpoint Panel ──────────────────────────────────────────────── */
 
+/* The tree is the one panel in the workbench that may give ground: it scrolls,
+   and the editor and generate panels have fixed chrome that cannot. */
 #checkpoint-panel {
-  flex-shrink: 0;
-  max-height: 25%;
+  flex: 1 1 auto;
+  overflow: hidden;
+  max-height: 100%;
   min-height: 60px;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid #1a1a3a;
-  background: #0a0a18;
-}
-
-#checkpoint-header {
-  height: 26px;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  font-size: 11px;
-  color: #505070;
-  background: linear-gradient(180deg, #0c0c1e, #0a0a18);
-  border-bottom: 1px solid #111130;
-  flex-shrink: 0;
-}
-
-#checkpoint-header .label {
-  color: #4466aa;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-#checkpoint-header .spacer {
-  flex: 1;
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
 }
 
 /* Collapsible checkpoint panel */
-#checkpoint-panel.collapsed #checkpoint-tree {
+#checkpoint-panel.collapsed #checkpoint-tree,
+#checkpoint-panel.collapsed #cp-branchpoint {
   display: none;
 }
 
@@ -1087,17 +1458,17 @@ body.dragging #splitter {
 }
 
 .panel-toggle {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
-  color: #4466aa;
+  color: var(--accent-label);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: transform 0.2s;
+  transition: transform var(--t-base) var(--ease);
   flex-shrink: 0;
 }
 
@@ -1110,17 +1481,48 @@ body.dragging #splitter {
   transform: rotate(-90deg);
 }
 
+/* Branch-point strip — the only place the branching rule (parent = whatever
+   is active the moment a file lands) is visible at all. It used to be a 4s
+   toast. The inset accent bar deliberately rhymes with the active row's, so
+   the strip visually points at the node it names. */
+#cp-branchpoint {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  flex-shrink: 0;
+  background: var(--surface-0);
+  border-bottom: 1px solid var(--border-hairline);
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#cp-branchpoint.hidden { display: none; }
+
+#cp-branchpoint strong { color: var(--fg); font-weight: 600; }
+
+#cp-branchpoint code {
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  color: var(--fg-faint);
+}
+
 /* ── Checkpoint Context Menu ────────────────────────────────────────── */
 
 #cp-context-menu {
   position: fixed;
-  z-index: 300;
+  z-index: var(--z-context);
   width: 200px;
-  background: #0e0e22;
-  border: 1px solid #2a2a5a;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  padding: 4px 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+  padding: var(--s1) 0;
   overflow: hidden;
 }
 
@@ -1134,47 +1536,48 @@ body.dragging #splitter {
   padding: 7px 14px;
   border: none;
   background: transparent;
-  color: #8888bb;
-  font-size: 12px;
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
   font-family: inherit;
 }
 
 .ctx-item:hover {
-  background: #1a1a3a;
-  color: #c0c0e0;
+  background: var(--hover-wash);
+  color: var(--fg);
 }
 
 .ctx-item.ctx-danger {
-  color: #cc4444;
+  color: var(--danger);
 }
 
 .ctx-item.ctx-danger:hover {
-  background: #2a1010;
-  color: #ff6666;
+  background: var(--danger-surface);
+  color: var(--danger);
 }
 
 .ctx-divider {
   height: 1px;
-  background: #1a1a3a;
-  margin: 4px 0;
+  background: var(--border-panel);
+  margin: var(--s1) 0;
 }
 
 /* ── Checkpoint Tooltip ────────────────────────────────────────────── */
 
 #cp-tooltip {
   position: fixed;
-  z-index: 200;
-  max-width: 320px;
+  z-index: var(--z-tooltip);
+  max-width: 380px;
   padding: 10px 14px;
-  background: #111130;
-  border: 1px solid #2a2a5a;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
   pointer-events: none;
-  font-size: 12px;
+  font-size: var(--text-body);
   line-height: 1.5;
 }
 
@@ -1183,7 +1586,7 @@ body.dragging #splitter {
 }
 
 #cp-tooltip-desc {
-  color: #c0c0e0;
+  color: var(--fg);
   margin-bottom: 6px;
 }
 
@@ -1191,10 +1594,21 @@ body.dragging #splitter {
   display: none;
 }
 
+/* Was #555580 = 2.80:1. */
 #cp-tooltip-meta {
-  color: #555580;
-  font-size: 10px;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  color: var(--fg-muted);
+  font-size: var(--text-chrome);
+  font-family: var(--font-mono);
+}
+
+#cp-tooltip-rule {
+  margin-top: 6px;
+  color: var(--cp-generated);
+  font-size: var(--text-chrome);
+}
+
+#cp-tooltip-rule:empty {
+  display: none;
 }
 
 #checkpoint-tree {
@@ -1208,80 +1622,168 @@ body.dragging #splitter {
 }
 
 #checkpoint-tree::-webkit-scrollbar-track {
-  background: #0a0a18;
+  background: var(--surface-1);
 }
 
 #checkpoint-tree::-webkit-scrollbar-thumb {
-  background: #1e1e3e;
+  background: var(--border-panel);
   border-radius: 3px;
 }
 
 #checkpoint-tree::-webkit-scrollbar-thumb:hover {
-  background: #2a2a5a;
+  background: var(--border-control);
 }
 
+/* Was 1.67:1 — functionally blank on first run, i.e. the worst
+   first-impression bug in the app. */
 .cp-empty {
-  padding: 20px 16px;
+  padding: var(--s5) var(--s4);
   text-align: center;
-  color: #333360;
-  font-size: 12px;
+  color: var(--fg-muted);
+  font-size: var(--text-body);
   line-height: 1.6;
 }
 
-/* ── Checkpoint Nodes ──────────────────────────────────────────────── */
+/* Two weights so it reads as an invitation, not an error. */
+.cp-empty strong {
+  display: block;
+  color: var(--fg-secondary);
+  font-weight: 600;
+  margin-bottom: var(--s1);
+}
+
+/* ── Checkpoint Nodes ──────────────────────────────────────────────────
+   A grid, not a flex line: the optional description second line would
+   otherwise push the dot and timestamp off vertical centre when it appears.
+   min-height, never height, for the same reason. */
 
 .cp-node {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto auto;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
+  column-gap: 6px;
+  min-height: 26px;
+  padding: 2px var(--s3);
   cursor: pointer;
-  font-size: 12px;
-  transition: background 0.15s;
+  font-size: var(--text-body);
+  transition: background var(--t-fast) var(--ease);
   position: relative;
 }
 
 .cp-node:hover {
-  background: #111128;
+  background: var(--hover-wash);
 }
 
+.cp-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* A 4% wash and a small dot were the only "active" signals, which is nearly
+   invisible in a tall tree. The left accent bar makes the branch point
+   unmistakable at a glance. */
 .cp-node.active {
-  background: #151538;
+  background: var(--active-wash);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.cp-node.active .cp-label {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* Mesh-derived checkpoints carry a different rule — branch, never edit — so
+   they get shape AND colour, never colour alone. */
+.cp-node[data-kind="generated"] .cp-dot {
+  border-radius: 1px;
+  transform: rotate(45deg);
+  border-color: var(--cp-generated);
+}
+
+.cp-node[data-kind="generated"].active {
+  box-shadow: inset 2px 0 0 var(--cp-generated);
+}
+
+.cp-node[data-kind="generated"].active .cp-dot {
+  background: var(--cp-generated);
+  border-color: var(--cp-generated);
+  box-shadow: 0 0 8px #b07cff55;
+}
+
+.cp-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--r-control);
+  color: var(--cp-generated);
+  background: #b07cff22;
+  border: 1px solid #b07cff40;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Adopted from disk rather than observed being written. */
+.cp-badge.cp-badge-found {
+  color: var(--cp-discovered);
+  background: #f0a63c22;
+  border-color: #f0a63c40;
+}
+
+.cp-badge.cp-badge-broken {
+  color: var(--cp-broken);
+  background: #ff6b6b22;
+  border-color: #ff6b6b40;
+}
+
+/* Every cell is placed explicitly: the optional second line would otherwise
+   push the badges, timestamp and chevron around by auto-placement. */
+.cp-badges {
+  grid-column: 4;
+  grid-row: 1;
+  display: flex;
+  gap: var(--s1);
+  align-items: center;
 }
 
 .cp-prefix {
-  color: #2a2a5a;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
-  font-size: 12px;
+  grid-row: 1 / -1;
+  color: var(--fg-faint);            /* was 1.53:1 */
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
   white-space: pre;
   flex-shrink: 0;
   line-height: 1;
 }
 
 .cp-dot {
+  grid-row: 1 / -1;
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  border: 2px solid #2a2a55;
+  border: 2px solid var(--border-control);
   background: transparent;
   flex-shrink: 0;
-  transition: all 0.2s;
+  transition: background var(--t-base) var(--ease),
+              border-color var(--t-base) var(--ease);
 }
 
 .cp-dot.root {
-  border-color: #337744;
+  border-color: var(--geometry);
 }
 
 .cp-node.active .cp-dot {
-  background: #4488ff;
-  border-color: #4488ff;
+  background: var(--accent);
+  border-color: var(--accent);
   box-shadow: 0 0 8px #4488ff55;
   animation: dotPulse 2s ease-in-out infinite;
 }
 
 .cp-node.active .cp-dot.root {
-  background: #44cc77;
-  border-color: #44cc77;
+  background: var(--geometry);
+  border-color: var(--geometry);
   box-shadow: 0 0 8px #44cc7755;
 }
 
@@ -1291,35 +1793,48 @@ body.dragging #splitter {
 }
 
 .cp-node:hover .cp-dot {
-  border-color: #4466aa;
+  border-color: var(--border-accent);
 }
 
 .cp-label {
-  flex: 1;
-  color: #666688;
+  grid-column: 3;
+  grid-row: 1;
+  color: var(--fg-secondary);        /* was 3.58:1 */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 0.15s;
-}
-
-.cp-node.active .cp-label {
-  color: #b0b0d0;
-  font-weight: 600;
+  transition: color var(--t-base) var(--ease);
 }
 
 .cp-node:hover .cp-label {
-  color: #9999bb;
+  color: var(--fg);
+}
+
+/* Second line — the first-line // comment, which is the single most
+   informative string in the app and was hover-only until now. */
+.cp-desc {
+  display: none;
+}
+
+.cp-node.with-desc .cp-desc {
+  display: block;
+  grid-column: 3 / -1;
+  grid-row: 2;
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cp-rename-input {
-  flex: 1;
-  padding: 1px 4px;
-  border: 1px solid #4466aa;
+  grid-column: 3;
+  padding: 1px var(--s1);
+  border: 1px solid var(--border-accent);
   border-radius: 3px;
-  background: #0a0a18;
-  color: #d0d0e0;
-  font-size: 12px;
+  background: var(--surface-1);
+  color: var(--fg);
+  font-size: var(--text-body);
   font-family: inherit;
   outline: none;
   min-width: 60px;
@@ -1328,85 +1843,111 @@ body.dragging #splitter {
 .cp-delete-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: #1e0e0e;
-  border-bottom: 1px solid #5a2a2a;
-  font-size: 12px;
-  color: #cc8888;
+  gap: var(--s2);
+  padding: 6px var(--s3);
+  background: var(--danger-surface);
+  border-bottom: 1px solid var(--danger);
+  font-size: var(--text-meta);
+  color: var(--fg-secondary);
+  flex-wrap: wrap;
+  line-height: 1.5;
 }
+
+.cp-delete-bar .cp-delete-msg {
+  flex-basis: 100%;
+}
+
+.cp-delete-bar strong { color: var(--fg); }
 
 .cp-delete-bar button {
   padding: 2px 10px;
   border-radius: 3px;
   border: 1px solid;
-  font-size: 11px;
+  font-size: var(--text-meta);
   cursor: pointer;
   font-family: inherit;
 }
 
 .cp-delete-yes {
-  background: #3a1515;
-  border-color: #5a2a2a;
-  color: #ff6666;
+  background: var(--danger-surface);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .cp-delete-yes:hover {
-  background: #4a1a1a;
+  background: #ff6b6b26;
 }
 
 .cp-delete-no {
   background: transparent;
-  border-color: #333355;
-  color: #8888aa;
+  border-color: var(--border-control);
+  color: var(--fg-muted);
 }
 
 .cp-delete-no:hover {
-  background: #1a1a3a;
+  background: var(--hover-wash);
 }
 
 .cp-collapse-icon {
-  font-size: 8px;
-  color: #444466;
+  grid-column: 6;
+  grid-row: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-faint);
   cursor: pointer;
-  margin-left: 4px;
-  padding: 2px;
   flex-shrink: 0;
-  transition: color 0.1s;
+  border: none;
+  background: transparent;
+  padding: 0;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.cp-collapse-icon svg {
+  width: 10px;
+  height: 10px;
 }
 
 .cp-collapse-icon:hover {
-  color: #8888bb;
+  color: var(--fg);
+}
+
+.cp-collapse-icon.is-collapsed svg {
+  transform: rotate(-90deg);
 }
 
 .cp-time {
-  color: #2a2a44;
-  font-size: 10px;
+  grid-column: 5;
+  grid-row: 1;
+  color: var(--fg-faint);            /* was 1.42:1 */
+  font-size: var(--text-chrome);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
-  font-family: "JetBrains Mono", Menlo, Monaco, monospace;
+  font-family: var(--font-mono);
 }
 
 /* ── Splitter ──────────────────────────────────────────────────────── */
 
 #splitter {
   width: 5px;
-  background: #111130;
+  background: var(--surface-raised);
   cursor: col-resize;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background var(--t-base) var(--ease);
   position: relative;
 }
 
 #splitter::after {
   content: '';
   position: absolute;
-  inset: 0 -3px;
+  inset: 0 -4px;
 }
 
 #splitter:hover,
 #splitter.active {
-  background: #4466cc;
+  background: var(--accent-dim);
 }
 
 /* ── Right Panel ───────────────────────────────────────────────────── */
@@ -1432,32 +1973,11 @@ body.dragging #splitter {
 }
 
 .terminal-pane + .terminal-pane:not(.hidden) {
-  border-top: 2px solid #222244;
+  border-top: 2px solid var(--border-control);
 }
 
 .terminal-pane-header {
-  height: 26px;
-  background: linear-gradient(180deg, #0c0c1e, #08081a);
-  border-bottom: 1px solid #1a1a3a;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  font-size: 11px;
-  color: #505070;
-  flex-shrink: 0;
   position: relative;
-}
-
-.terminal-pane-header .label {
-  color: #4466aa;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-.terminal-pane-header .spacer {
-  flex: 1;
 }
 
 /* ── Session Dropdown ──────────────────────────────────────────────── */
@@ -1465,14 +1985,14 @@ body.dragging #splitter {
 #session-dropdown {
   position: absolute;
   top: 100%;
-  right: 8px;
+  right: var(--s2);
   width: 320px;
   max-height: 360px;
-  background: #0e0e22;
-  border: 1px solid #1a1a3a;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  z-index: 100;
+  background: var(--surface-3);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-floating);
+  z-index: var(--z-popover);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1485,32 +2005,33 @@ body.dragging #splitter {
 .session-action {
   display: block;
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--s2) var(--s3);
   border: none;
   background: transparent;
-  color: #8888bb;
-  font-size: 12px;
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
   font-family: inherit;
 }
 
 .session-action:hover {
-  background: #151538;
-  color: #b0b0d0;
+  background: var(--hover-wash);
+  color: var(--fg);
 }
 
 .session-action:first-child {
-  color: #4488ff;
+  color: var(--accent);
   font-weight: 600;
 }
 
 .session-divider {
   height: 1px;
-  background: #1a1a3a;
-  margin: 4px 0;
+  background: var(--border-panel);
+  margin: var(--s1) 0;
 }
 
 #session-list {
@@ -1524,48 +2045,49 @@ body.dragging #splitter {
 }
 
 #session-list::-webkit-scrollbar-thumb {
-  background: #1e1e3e;
+  background: var(--border-panel);
   border-radius: 3px;
 }
 
 .session-item {
-  padding: 8px 12px;
+  padding: var(--s2) var(--s3);
   cursor: pointer;
-  transition: background 0.1s;
-  border-bottom: 1px solid #111130;
+  transition: background var(--t-fast) var(--ease);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .session-item:hover {
-  background: #151538;
+  background: var(--hover-wash);
 }
 
 .session-item-date {
-  font-size: 10px;
-  color: #444466;
+  font-size: var(--text-chrome);
+  color: var(--fg-faint);
   font-variant-numeric: tabular-nums;
   margin-bottom: 2px;
 }
 
 .session-item-msg {
-  font-size: 11px;
-  color: #7777aa;
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-empty {
-  padding: 16px;
+  padding: var(--s4);
   text-align: center;
-  color: #333360;
-  font-size: 11px;
+  color: var(--fg-muted);
+  font-size: var(--text-meta);
+  line-height: 1.5;
 }
 
 .terminal-container {
   flex: 1;
   overflow: hidden;
-  background: #0d0d1a;
-  padding: 4px;
+  background: var(--surface-2);
+  padding: var(--s1);
 }
 
 .xterm {
@@ -1577,44 +2099,46 @@ body.dragging #splitter {
 }
 
 .xterm-viewport::-webkit-scrollbar-track {
-  background: #0d0d1a;
+  background: var(--surface-2);
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #1e1e3e;
+  background: var(--border-panel);
   border-radius: 3px;
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: #2a2a5a;
+  background: var(--border-control);
 }
 
 /* ── Toast Notifications ───────────────────────────────────────────── */
 
 #toast-container {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 1000;
+  bottom: var(--s4);
+  right: var(--s4);
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--s2);
   pointer-events: none;
 }
 
 .toast {
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 10px var(--s4);
+  border-radius: var(--r-control);
+  font-size: var(--text-body);
   font-weight: 500;
-  color: #d0d0e0;
-  background: #1a1a38;
-  border: 1px solid #2a2a5a;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  color: var(--fg);
+  background: var(--surface-3);
+  border: 1px solid var(--border-panel);
+  border-left: 3px solid var(--border-control);
+  box-shadow: var(--e-floating);
   pointer-events: auto;
   transform: translateY(20px);
   opacity: 0;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform var(--t-base) var(--ease),
+              opacity var(--t-base) var(--ease);
 }
 
 .toast.visible {
@@ -1623,7 +2147,7 @@ body.dragging #splitter {
 }
 
 .toast.hiding {
-  animation: toastOut 0.3s ease forwards;
+  animation: toastOut var(--t-slow) var(--ease) forwards;
 }
 
 @keyframes toastOut {
@@ -1633,17 +2157,414 @@ body.dragging #splitter {
   }
 }
 
-.toast-success {
-  border-color: #2a5a3a;
-  background: #0e1e18;
+/* Left accent bar carries the type — colour is not the only signal. */
+.toast-success { border-left-color: var(--geometry); }
+.toast-error   { border-left-color: var(--danger); }
+.toast-info    { border-left-color: var(--accent); }
+
+/* ── App Version (status bar) ─────────────────────────────────────── */
+
+.app-version {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
 }
 
-.toast-error {
-  border-color: #5a2a2a;
-  background: #1e0e0e;
+/* ── Update pill (status bar) ────────────────────────────────────────
+   Shown only for a STAGED update. "Checking" and "downloading" stay silent:
+   a notification the user cannot act on is noise, and the install happens on
+   quit anyway — the pill exists so they can take it sooner if they want. */
+
+.update-pill {
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  padding: 1px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.toast-info {
-  border-color: #2a2a5a;
-  background: #1a1a38;
+.update-pill:hover {
+  background: var(--accent);
+  color: var(--surface-0);
+}
+
+/* ── Generate Panel ────────────────────────────────────────────────── */
+
+#gen-panel {
+  flex-shrink: 0;
+  max-height: 100%;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-panel);
+  background: var(--surface-1);
+}
+
+#gen-panel.collapsed #gen-body {
+  display: none;
+}
+
+#gen-panel.collapsed {
+  min-height: auto;
+  max-height: none;
+}
+
+#gen-panel.collapsed .panel-toggle {
+  transform: rotate(-90deg);
+}
+
+#gen-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gen-empty {
+  padding: var(--s4);
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.gen-empty strong {
+  display: block;
+  color: var(--fg-secondary);
+  font-weight: 600;
+  margin-bottom: var(--s1);
+}
+
+.gen-empty a {
+  color: var(--accent);
+}
+
+.gen-empty-actions {
+  display: flex;
+  gap: var(--s2);
+  justify-content: center;
+  margin-top: var(--s2);
+  flex-wrap: wrap;
+}
+
+.gen-empty-detail {
+  margin-top: var(--s2);
+  max-height: 120px;
+  overflow: auto;
+  padding: 6px var(--s2);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--r-inline);
+  background: var(--surface-0);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  white-space: pre-wrap;
+  text-align: left;
+  user-select: text;
+}
+
+.gen-empty-detail[hidden] { display: none; }
+
+.gen-empty.hidden,
+#gen-configured.hidden {
+  display: none;
+}
+
+#gen-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gen-hint {
+  color: var(--fg-muted);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+}
+
+.gen-hint em {
+  color: var(--fg-faint);
+  font-style: normal;
+}
+
+#gen-prompt {
+  width: 100%;
+  resize: vertical;
+  padding: 6px var(--s2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-inline);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: var(--text-body);
+  font-family: inherit;
+  outline: none;
+}
+
+#gen-prompt:focus {
+  border-color: var(--border-accent);
+}
+
+.gen-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.gen-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-secondary);
+  font-size: var(--text-chrome);
+}
+
+.gen-field select {
+  padding: 2px 6px;
+  border: 1px solid var(--border-control);
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: var(--text-chrome);
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.gen-backends {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gen-backend-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--fg-muted);
+  font-size: var(--text-chrome);
+  cursor: pointer;
+}
+
+.gen-backend-check input {
+  accent-color: var(--accent);
+}
+
+.gen-backend-check.unavailable {
+  color: var(--fg-disabled);
+  text-decoration: line-through;
+}
+
+/* ── Generate stage stepper ────────────────────────────────────────────
+   A ~10 minute job used to report nothing but a 26px grey bar: the panel
+   ships collapsed and nothing un-collapsed it, and the log was the only
+   progress signal. The stepper is ADDITIVE above #gen-log — the log stays,
+   generate-panel.spec.js asserts it contains "checkpoint: done". */
+
+#gen-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s2) 0;
+  flex-wrap: wrap;
+}
+
+#gen-stepper[hidden] { display: none; }
+
+.gen-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.gen-step + .gen-step::before {
+  content: '';
+  width: 14px;
+  height: 1px;
+  background: var(--border-control);
+  margin-right: 2px;
+}
+
+.gen-step .gen-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--border-control);
+  flex-shrink: 0;
+}
+
+.gen-step.done .gen-step-dot {
+  background: var(--geometry);
+  border-color: var(--geometry);
+}
+
+.gen-step.running {
+  color: var(--warn);
+}
+
+.gen-step.running .gen-step-dot {
+  background: var(--warn);
+  border-color: var(--warn);
+  box-shadow: 0 0 6px #f0a63c66;
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+.gen-step.failed {
+  color: var(--danger);
+}
+
+.gen-step.failed .gen-step-dot {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+#gen-elapsed {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+#gen-bar {
+  width: 100%;
+  height: 3px;
+  background: var(--border-panel);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#gen-bar[hidden] { display: none; }
+
+.gen-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.gen-image-grid:empty {
+  display: none;
+}
+
+.gen-round-label {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  letter-spacing: var(--track-chrome);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.gen-candidate {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 2px solid var(--border-control);
+  border-radius: var(--r-control);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface-2);
+  transition: border-color var(--t-base) var(--ease);
+}
+
+.gen-candidate:hover {
+  border-color: var(--border-hover);
+}
+
+.gen-candidate.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px #4488ff55;
+}
+
+/* Selection was accent border + glow only — invisible to a colourblind read.
+   The check badge is the shape half of the signal. */
+.gen-candidate.selected::after {
+  content: '\2713';
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--surface-0);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gen-candidate img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gen-candidate .gen-candidate-score {
+  position: absolute;
+  bottom: 2px;
+  right: var(--s1);
+  font-size: 9px;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 1px var(--s1);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+.gen-candidate .gen-candidate-meta {
+  position: absolute;
+  bottom: 2px;
+  left: 3px;
+  font-size: 9px;
+  color: var(--fg-secondary);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 1px var(--s1);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen-log {
+  min-height: 40px;
+  max-height: 110px;
+  overflow-y: auto;
+  padding: 6px var(--s2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-inline);
+  /* was #08081200 — an 8-digit hex whose 00 alpha made it fully transparent,
+     so the log had no background at all. */
+  background: var(--surface-0);
+  font-family: var(--font-mono);
+  font-size: var(--text-chrome);
+  color: var(--fg-muted);            /* was #555580 = 2.80:1 */
+  line-height: 1.5;
+}
+
+.gen-log:empty {
+  display: none;
+}
+
+.gen-log-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.gen-log-line.gen-log-error {
+  color: var(--danger);
 }
