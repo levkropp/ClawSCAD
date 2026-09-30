@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test backend reliability
+        run: npm run test:backend
+
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |

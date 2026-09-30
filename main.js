@@ -95,7 +95,16 @@ class McpClient {
       return;
     }
 
-    this.proc.stdout.on('data', (chunk) => {
+    const proc = this.proc;
+    const onError = (err) => {
+      console.error('openscad-mcp-server process error:', err.message);
+      this._disconnect(proc, err);
+    };
+    proc.on('error', onError);
+    proc.stdin.on('error', onError);
+
+    proc.stdout.on('data', (chunk) => {
+      if (this.proc !== proc) return;
       this.buffer += chunk.toString();
       this._processBuffer();
     });
@@ -104,13 +113,7 @@ class McpClient {
       // MCP server logs go to stderr — ignore unless debugging
     });
 
-    this.proc.on('exit', () => {
-      this.proc = null;
-      this.ready = false;
-      // Reject all pending
-      for (const [, p] of this.pending) p.reject(new Error('MCP server exited'));
-      this.pending.clear();
-    });
+    proc.on('exit', () => this._disconnect(proc, new Error('MCP server exited')));
 
     // MCP handshake
     try {
@@ -119,6 +122,7 @@ class McpClient {
         capabilities: {},
         clientInfo: { name: 'ClawSCAD', version: '0.1.0' },
       });
+      if (this.proc !== proc) return;
       this._notify('notifications/initialized');
       this.ready = true;
     } catch (err) {
@@ -128,10 +132,20 @@ class McpClient {
 
   stop() {
     if (this.proc) {
-      try { this.proc.kill(); } catch {}
-      this.proc = null;
-      this.ready = false;
+      const proc = this.proc;
+      try { proc.kill(); } catch {}
+      this._disconnect(proc, new Error('MCP server stopped'));
     }
+  }
+
+  _disconnect(proc, err) {
+    // An old child's delayed exit must not clear a replacement connection.
+    if (this.proc !== proc) return;
+    this.proc = null;
+    this.ready = false;
+    this.buffer = '';
+    for (const [, p] of this.pending) p.reject(err);
+    this.pending.clear();
   }
 
   _processBuffer() {
@@ -245,7 +259,7 @@ function openWindow(wsDir) {
     ptyProcess: null,
     renderQueue: [],
     isRendering: false,
-    renderFormat: '3mf',
+    stlFallbackFor: null,
   };
 
   const wcId = win.webContents.id;
@@ -349,7 +363,10 @@ function updateAllClaudeMd() {
   }
 }
 
-function writeClaudeMd(ctx, allWorkspaces) {
+const CLAUDE_MD_START = '<!-- clawscad:rules:start -->';
+const CLAUDE_MD_END = '<!-- clawscad:rules:end -->';
+
+function buildClaudeMdBlock(ctx, allWorkspaces) {
   const others = allWorkspaces.filter((w) => w !== ctx.workspaceDir);
   let md = `# ClawSCAD Workspace — MANDATORY RULES\n\n${CLAUDE_MD_RULES}\n`;
 
@@ -368,7 +385,24 @@ function writeClaudeMd(ctx, allWorkspaces) {
     md += `You can read any file from these paths. If the user asks you to combine or reference designs from other projects, read the relevant .scad files directly.\n`;
   }
 
-  fs.writeFileSync(path.join(ctx.workspaceDir, 'CLAUDE.md'), md);
+  return md.replace(/\n+$/, '');
+}
+
+function writeClaudeMd(ctx, allWorkspaces) {
+  const filePath = path.join(ctx.workspaceDir, 'CLAUDE.md');
+  const managed = `${CLAUDE_MD_START}\n${buildClaudeMdBlock(ctx, allWorkspaces)}\n${CLAUDE_MD_END}`;
+  let existing = '';
+  try {
+    existing = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  const start = existing.indexOf(CLAUDE_MD_START);
+  const end = existing.indexOf(CLAUDE_MD_END, start + CLAUDE_MD_START.length);
+  const output = start !== -1 && end !== -1
+    ? existing.slice(0, start) + managed + existing.slice(end + CLAUDE_MD_END.length)
+    : managed + (existing ? '\n\n' + existing : '\n');
+  fs.writeFileSync(filePath, output);
 }
 
 function initWorkspace(ctx) {
@@ -530,7 +564,9 @@ function processRenderQueue(ctx) {
   if (ctx.isRendering || ctx.renderQueue.length === 0) return;
   ctx.isRendering = true;
   const scadPath = ctx.renderQueue.shift();
-  const outputExt = ctx.renderFormat === '3mf' ? '.3mf' : '.stl';
+  // A 3MF failure affects only this file; later models still retain colour.
+  const format = ctx.stlFallbackFor === scadPath ? 'stl' : '3mf';
+  const outputExt = format === '3mf' ? '.3mf' : '.stl';
   const outputPath = scadPath.replace(/\.scad$/, outputExt);
 
   ctxSend(ctx, 'render:start', { file: path.basename(scadPath) });
@@ -538,33 +574,51 @@ function processRenderQueue(ctx) {
   execFile(OPENSCAD_BIN, ['-o', outputPath, scadPath], { timeout: 120000, env: openscadEnv() }, (err, stdout, stderr) => {
     ctx.isRendering = false;
 
-    if (err || !fs.existsSync(outputPath)) {
-      if (ctx.renderFormat === '3mf') {
-        ctx.renderFormat = 'stl';
+    const fault = classifyRenderFailure(err, outputPath);
+    if (fault) {
+      if (format === '3mf' && fault === 'model') {
+        ctx.stlFallbackFor = scadPath;
         ctx.renderQueue.unshift(scadPath);
         processRenderQueue(ctx);
         return;
       }
-      const errorText = stderr || (err && err.message) || 'Unknown error';
+      ctx.stlFallbackFor = null;
+      const errorText = stderr || (err && err.message) || 'OpenSCAD produced no model';
       const errors = parseOpenSCADErrors(errorText);
       ctxSend(ctx, 'render:error', {
         file: path.basename(scadPath),
         error: errorText,
         errors,
+        fault,
       });
-      // Auto-iteration: write errors so Claude can see them and nudge the terminal
-      writeRenderErrors(ctx, path.basename(scadPath), errorText, errors);
+      // Installation faults and timeouts do not mean the model needs rewriting.
+      if (fault === 'model') writeRenderErrors(ctx, path.basename(scadPath), errorText, errors);
     } else {
+      ctx.stlFallbackFor = null;
       if (stderr && stderr.includes('WARNING')) {
         ctxSend(ctx, 'render:warning', { file: path.basename(scadPath), warnings: stderr });
       }
-      sendModel(ctx, outputPath, ctx.renderFormat);
+      sendModel(ctx, outputPath, format);
       ctxSend(ctx, 'render:complete', { file: path.basename(scadPath) });
       clearRenderErrors(ctx);
     }
 
     processRenderQueue(ctx);
   });
+}
+
+function classifyRenderFailure(err, outputPath) {
+  if (err) {
+    if (['ENOENT', 'EACCES', 'EPERM'].includes(err.code)) return 'environment';
+    if (err.killed || err.signal === 'SIGTERM' || err.code === 'ETIMEDOUT') return 'timeout';
+    return 'model';
+  }
+  try {
+    const output = fs.statSync(outputPath);
+    return output.isFile() && output.size > 0 ? null : 'model';
+  } catch {
+    return 'model';
+  }
 }
 
 function parseOpenSCADErrors(stderr) {
@@ -748,6 +802,9 @@ function startFileWatcher(ctx) {
   });
   ctx.fileWatcher.on('add', (fp) => handleFileEvent(ctx, fp));
   ctx.fileWatcher.on('change', (fp) => handleFileEvent(ctx, fp));
+  ctx.fileWatcher.on('error', (err) => {
+    console.warn(`File watcher error for ${ctx.workspaceDir}:`, err.message);
+  });
 }
 
 function handleFileEvent(ctx, filePath) {
