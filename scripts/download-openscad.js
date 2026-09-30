@@ -64,6 +64,8 @@ const ASSETS = {
     tmp: path.join(VENDOR_DIR, '_openscad-win.zip'),
     ready: path.join(VENDOR_DIR, 'openscad-win'),
     finalize(tmp, ready) {
+      // Re-extraction must not merge a new archive into an old nested layout.
+      if (fs.existsSync(ready)) fs.rmSync(ready, { recursive: true, force: true });
       // Use PowerShell on Windows; fall back to unzip on CI runners
       try {
         execFileSync('powershell', [
@@ -74,6 +76,10 @@ const ASSETS = {
         execFileSync('unzip', ['-q', tmp, '-d', ready]);
       }
       fs.rmSync(tmp, { force: true });
+      flattenSingleDir(ready, 'openscad.exe');
+      if (!fs.existsSync(path.join(ready, 'openscad.exe'))) {
+        throw new Error('OpenSCAD archive does not contain openscad.exe at the expected location');
+      }
       console.log(`  → ${ready}`);
     },
   },
@@ -81,6 +87,21 @@ const ASSETS = {
 
 // Intel Mac reuses the arm64 finalize
 ASSETS['darwin-x64'].finalize = ASSETS['darwin-arm64'].finalize;
+
+// Snapshot zips may contain one enclosing directory. The packaged app expects
+// openscad.exe directly inside vendors/openscad-win.
+function flattenSingleDir(dir, marker) {
+  if (fs.existsSync(path.join(dir, marker))) return false;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  if (entries.length !== 1 || !entries[0].isDirectory()) return false;
+  const inner = path.join(dir, entries[0].name);
+  if (!fs.existsSync(path.join(inner, marker))) return false;
+  for (const name of fs.readdirSync(inner)) {
+    fs.renameSync(path.join(inner, name), path.join(dir, name));
+  }
+  fs.rmdirSync(inner);
+  return true;
+}
 
 // ── Download helper ───────────────────────────────────────────────────────────
 
@@ -134,10 +155,17 @@ async function main() {
 
   fs.mkdirSync(VENDOR_DIR, { recursive: true });
 
-  // Skip if already present (unless --force)
+  // Repair existing downloads made before the Windows archive layout fix.
+  if (key === 'win32-x64' && fs.existsSync(asset.ready)) {
+    flattenSingleDir(asset.ready, 'openscad.exe');
+  }
+
+  // Skip only when the expected executable is actually present.
   if (!force && fs.existsSync(asset.ready)) {
-    console.log(`OpenSCAD ${SNAPSHOT} already present at vendors/ — skipping (use --force to re-download).`);
-    return;
+    if (key !== 'win32-x64' || fs.existsSync(path.join(asset.ready, 'openscad.exe'))) {
+      console.log(`OpenSCAD ${SNAPSHOT} already present at vendors/ — skipping (use --force to re-download).`);
+      return;
+    }
   }
 
   console.log(`Downloading OpenSCAD ${SNAPSHOT} for ${key}...`);
@@ -149,7 +177,11 @@ async function main() {
   console.log(`Done. OpenSCAD ${SNAPSHOT} is ready.`);
 }
 
-main().catch((e) => {
-  console.error('\nDownload failed:', e.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('\nDownload failed:', e.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { flattenSingleDir };

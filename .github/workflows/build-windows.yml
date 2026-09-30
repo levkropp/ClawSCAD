@@ -46,6 +46,9 @@ jobs:
       - name: Download OpenSCAD
         run: npm run download-openscad
 
+      - name: Check bundled OpenSCAD path
+        run: node tests/download-openscad.js --vendor
+
       - name: Build renderer
         run: npm run build:renderer
 
